@@ -1,92 +1,244 @@
 /* =====================================================
-   DISLAM
-   CONTROLE DE DESCARGAS
-   FIREBASE / FIRESTORE
+   FIREBASE / CLOUD FIRESTORE
 ===================================================== */
 
-import {
-    initializeApp
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import {
     getFirestore,
     collection,
     getDocs,
-    getDoc,
     doc,
     setDoc,
-    addDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    orderBy
+    deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-
-/* =====================================================
-   CONFIGURAÇÃO FIREBASE
-===================================================== */
-
-/*
-   COLOQUE AQUI A CONFIGURAÇÃO DO SEU FIREBASE.
-
-   Ela fica em:
-
-   Firebase
-   → Configurações do projeto
-   → Seus aplicativos
-   → Aplicativo da Web
-   → Configuração do SDK
-*/
-
 const firebaseConfig = {
-
     apiKey: "AIzaSyABxI_rPAPaIgHpmVtKV9R7CsvOJptmL-g",
-
     authDomain: "descarrego.firebaseapp.com",
-
     projectId: "descarrego",
-
     storageBucket: "descarrego.firebasestorage.app",
-
     messagingSenderId: "878361368085",
-
     appId: "1:878361368085:web:c5dd0fdd25e73af61ba01c",
-
     measurementId: "G-94S2ZMPQ7X"
-
 };
 
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+/* Cache local da sessão e dos dados carregados do Firestore */
+let cloudUsers = [];
+let cloudDescargas = [];
+let cloudGastos = [];
+let cloudHistory = [];
+
+async function loadCollection(name) {
+    const snapshot = await getDocs(collection(db, name));
+    return snapshot.docs.map(item => ({
+        ...item.data(),
+        id: item.id
+    }));
+}
+
+async function writeCollection(name, items, previousOverride = null) {
+    const previous = previousOverride || {
+        users: cloudUsers,
+        descargas: cloudDescargas,
+        gastos: cloudGastos,
+        history: cloudHistory
+    }[name] || [];
+
+    const currentIds = new Set(items.map(item => String(item.id)));
+
+    for (const oldItem of previous) {
+        if (!currentIds.has(String(oldItem.id))) {
+            try {
+                await deleteDoc(doc(db, name, String(oldItem.id)));
+            } catch (error) {
+                console.error(`Erro ao excluir ${name}:`, error);
+            }
+        }
+    }
+
+    await Promise.all(
+        items.map(item =>
+            setDoc(
+                doc(db, name, String(item.id)),
+                item
+            )
+        )
+    );
+
+    if (name === "users") cloudUsers = [...items];
+    if (name === "descargas") cloudDescargas = [...items];
+    if (name === "gastos") cloudGastos = [...items];
+    if (name === "history") cloudHistory = [...items];
+}
+
+async function initializeCloudData() {
+    const localUsers = JSON.parse(localStorage.getItem(STORAGE_USERS) || "null");
+    const localDescargas = JSON.parse(localStorage.getItem(STORAGE_DESCARGAS) || "[]");
+    const localGastos = JSON.parse(localStorage.getItem(STORAGE_GASTOS) || "[]");
+    const localHistory = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]");
+
+    cloudUsers = await loadCollection("users");
+    cloudDescargas = await loadCollection("descargas");
+    cloudGastos = await loadCollection("gastos");
+    cloudHistory = await loadCollection("history");
+
+    /*
+     * Migração automática:
+     * se uma coleção do Firestore estiver vazia, aproveita os dados
+     * que já estavam salvos neste navegador.
+     */
+    if (!cloudUsers.length) {
+        cloudUsers = localUsers || [{
+            id: 1,
+            name: "Administrador",
+            username: "admin",
+            password: "1234",
+            role: "admin",
+            createdAt: new Date().toISOString()
+        }];
+        await writeCollection("users", cloudUsers);
+    }
+
+    if (!cloudDescargas.length && localDescargas.length) {
+        await writeCollection("descargas", localDescargas);
+    }
+
+    if (!cloudGastos.length && localGastos.length) {
+        await writeCollection("gastos", localGastos);
+    }
+
+    if (!cloudHistory.length && localHistory.length) {
+        await writeCollection("history", localHistory);
+    }
+
+    /* Mantém uma cópia local apenas como cache/compatibilidade. */
+    localStorage.setItem(STORAGE_USERS, JSON.stringify(cloudUsers));
+    localStorage.setItem(STORAGE_DESCARGAS, JSON.stringify(cloudDescargas));
+    localStorage.setItem(STORAGE_GASTOS, JSON.stringify(cloudGastos));
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(cloudHistory));
+}
+
+
+const STORAGE_USERS = "dislam_users";
+const STORAGE_DESCARGAS = "dislam_descargas";
+const STORAGE_GASTOS = "dislam_gastos";
+const STORAGE_HISTORY = "dislam_history";
+const STORAGE_SESSION = "dislam_session";
+
+
 
 /* =====================================================
-   INICIALIZAR FIREBASE
+   USUÁRIOS
 ===================================================== */
 
-const app =
-    initializeApp(firebaseConfig);
+function getUsers() {
+    return cloudUsers;
+}
 
-const db =
-    getFirestore(app);
-
+function saveUsers(users) {
+    const previous = cloudUsers;
+    cloudUsers = [...users];
+    localStorage.setItem(STORAGE_USERS, JSON.stringify(cloudUsers));
+    writeCollection("users", cloudUsers, previous).catch(error =>
+        console.error("Erro ao salvar usuários no Firestore:", error)
+    );
+}
 
 /* =====================================================
-   COLEÇÕES
+   DADOS
 ===================================================== */
 
-const USERS_COLLECTION = "users";
-const DESCARGAS_COLLECTION = "descargas";
-const GASTOS_COLLECTION = "gastos";
-const HISTORY_COLLECTION = "history";
+function getDescargas() {
+    return cloudDescargas;
+}
+
+function saveDescargas(data) {
+    const previous = cloudDescargas;
+    cloudDescargas = [...data];
+    localStorage.setItem(STORAGE_DESCARGAS, JSON.stringify(cloudDescargas));
+    writeCollection("descargas", cloudDescargas, previous).catch(error =>
+        console.error("Erro ao salvar descargas no Firestore:", error)
+    );
+}
+
+function getGastos() {
+    return cloudGastos;
+}
+
+function saveGastos(data) {
+    const previous = cloudGastos;
+    cloudGastos = [...data];
+    localStorage.setItem(STORAGE_GASTOS, JSON.stringify(cloudGastos));
+    writeCollection("gastos", cloudGastos, previous).catch(error =>
+        console.error("Erro ao salvar gastos no Firestore:", error)
+    );
+}
+
+function getHistory() {
+    return cloudHistory;
+}
+
+function saveHistory(data) {
+    const previous = cloudHistory;
+    cloudHistory = [...data];
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(cloudHistory));
+    writeCollection("history", cloudHistory, previous).catch(error =>
+        console.error("Erro ao salvar histórico no Firestore:", error)
+    );
+}
 
 
 /* =====================================================
    SESSÃO
 ===================================================== */
 
-const STORAGE_SESSION =
-    "dislam_session";
-
 let currentUser = null;
+
+
+function loadSession() {
+
+    const sessionId =
+        localStorage.getItem(STORAGE_SESSION);
+
+    if (!sessionId) {
+        return;
+    }
+
+    const users = getUsers();
+
+    currentUser = users.find(
+        user =>
+            String(user.id) ===
+            String(sessionId)
+    ) || null;
+
+}
+
+
+function saveSession() {
+
+    if (currentUser) {
+
+        localStorage.setItem(
+            STORAGE_SESSION,
+            currentUser.id
+        );
+
+    }
+
+}
+
+
+function clearSession() {
+
+    localStorage.removeItem(STORAGE_SESSION);
+
+    currentUser = null;
+
+}
 
 
 /* =====================================================
@@ -114,20 +266,18 @@ function parseMoney(value) {
         return 0;
     }
 
-    let text =
-        String(value)
-            .replace(/\s/g, "")
-            .replace(/R\$/g, "");
+    let text = String(value)
+        .replace(/\s/g, "")
+        .replace(/R\$/g, "");
 
     if (
         text.includes(",") &&
         text.includes(".")
     ) {
 
-        text =
-            text
-                .replace(/\./g, "")
-                .replace(",", ".");
+        text = text
+            .replace(/\./g, "")
+            .replace(",", ".");
 
     } else if (
         text.includes(",")
@@ -154,8 +304,7 @@ function formatDate(date) {
         return "-";
     }
 
-    const d =
-        new Date(date);
+    const d = new Date(date);
 
     if (isNaN(d.getTime())) {
         return "-";
@@ -177,12 +326,10 @@ function formatDate(date) {
 
 function localDateTime() {
 
-    const now =
-        new Date();
+    const now = new Date();
 
     const offset =
-        now.getTimezoneOffset() *
-        60000;
+        now.getTimezoneOffset() * 60000;
 
     return new Date(
         now.getTime() - offset
@@ -208,28 +355,17 @@ function escapeHTML(value) {
 function generateId() {
 
     return Date.now() +
-        Math.floor(
-            Math.random() * 10000
-        );
+        Math.floor(Math.random() * 10000);
 
 }
 
 
 function getInitial(name) {
 
-    return String(
-        name || "U"
-    )
+    return String(name || "U")
         .trim()
         .charAt(0)
         .toUpperCase();
-
-}
-
-
-function getNow() {
-
-    return new Date().toISOString();
 
 }
 
@@ -248,10 +384,6 @@ function showToast(
             "toastContainer"
         );
 
-    if (!container) {
-        return;
-    }
-
     const toast =
         document.createElement("div");
 
@@ -263,397 +395,121 @@ function showToast(
 
     container.appendChild(toast);
 
-    setTimeout(
-        () => toast.remove(),
-        3000
-    );
+    setTimeout(() => {
+
+        toast.remove();
+
+    }, 3000);
 
 }
 
 
 /* =====================================================
-   FIRESTORE - USUÁRIOS
+   HISTÓRICO
 ===================================================== */
 
-async function getUsers() {
-
-    try {
-
-        const snapshot =
-            await getDocs(
-                collection(
-                    db,
-                    USERS_COLLECTION
-                )
-            );
-
-        const users = [];
-
-        snapshot.forEach(
-            item => {
-
-                users.push({
-                    id: item.id,
-                    ...item.data()
-                });
-
-            }
-        );
-
-        return users;
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao buscar usuários:",
-            error
-        );
-
-        showToast(
-            "Erro ao conectar com o Firebase.",
-            "error"
-        );
-
-        return [];
-
-    }
-
-}
-
-
-/* =====================================================
-   CRIAR ADMINISTRADOR INICIAL
-===================================================== */
-
-async function initializeAdmin() {
-
-    try {
-
-        const users =
-            await getUsers();
-
-        if (users.length > 0) {
-            return;
-        }
-
-        const adminId =
-            String(generateId());
-
-        const admin = {
-
-            id: adminId,
-
-            name:
-                "Administrador",
-
-            username:
-                "admin",
-
-            password:
-                "1234",
-
-            role:
-                "admin",
-
-            createdAt:
-                getNow()
-
-        };
-
-        await setDoc(
-            doc(
-                db,
-                USERS_COLLECTION,
-                adminId
-            ),
-            admin
-        );
-
-        console.log(
-            "Administrador inicial criado."
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao criar administrador:",
-            error
-        );
-
-    }
-
-}
-
-
-/* =====================================================
-   FIRESTORE - DESCARGAS
-===================================================== */
-
-async function getDescargas() {
-
-    try {
-
-        const snapshot =
-            await getDocs(
-                collection(
-                    db,
-                    DESCARGAS_COLLECTION
-                )
-            );
-
-        const data = [];
-
-        snapshot.forEach(
-            item => {
-
-                data.push({
-                    id: item.id,
-                    ...item.data()
-                });
-
-            }
-        );
-
-        return data;
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao buscar descargas:",
-            error
-        );
-
-        return [];
-
-    }
-
-}
-
-
-/* =====================================================
-   FIRESTORE - GASTOS
-===================================================== */
-
-async function getGastos() {
-
-    try {
-
-        const snapshot =
-            await getDocs(
-                collection(
-                    db,
-                    GASTOS_COLLECTION
-                )
-            );
-
-        const data = [];
-
-        snapshot.forEach(
-            item => {
-
-                data.push({
-                    id: item.id,
-                    ...item.data()
-                });
-
-            }
-        );
-
-        return data;
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao buscar gastos:",
-            error
-        );
-
-        return [];
-
-    }
-
-}
-
-
-/* =====================================================
-   FIRESTORE - HISTÓRICO
-===================================================== */
-
-async function getHistory() {
-
-    try {
-
-        const snapshot =
-            await getDocs(
-                collection(
-                    db,
-                    HISTORY_COLLECTION
-                )
-            );
-
-        const history = [];
-
-        snapshot.forEach(
-            item => {
-
-                history.push({
-                    id: item.id,
-                    ...item.data()
-                });
-
-            }
-        );
-
-        history.sort(
-            (a, b) =>
-                new Date(b.date) -
-                new Date(a.date)
-        );
-
-        return history;
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao buscar histórico:",
-            error
-        );
-
-        return [];
-
-    }
-
-}
-
-
-/* =====================================================
-   ADICIONAR HISTÓRICO
-===================================================== */
-
-async function addHistory(
+function addHistory(
     action,
     description
 ) {
 
-    try {
+    const history =
+        getHistory();
 
-        await addDoc(
-            collection(
-                db,
-                HISTORY_COLLECTION
-            ),
-            {
+    history.unshift({
 
-                action,
+        id: generateId(),
 
-                description,
+        action,
 
-                userId:
-                    currentUser
-                        ? currentUser.id
-                        : null,
+        description,
 
-                userName:
-                    currentUser
-                        ? currentUser.name
-                        : "Sistema",
+        userId:
+            currentUser
+                ? currentUser.id
+                : null,
 
-                date:
-                    getNow()
+        userName:
+            currentUser
+                ? currentUser.name
+                : "Sistema",
 
-            }
-        );
+        date:
+            new Date().toISOString()
 
-    } catch (error) {
+    });
 
-        console.error(
-            "Erro ao registrar histórico:",
-            error
-        );
-
-    }
+    saveHistory(history);
 
 }
 
 
-/* =====================================================
-   SESSÃO
-===================================================== */
+function renderHistory() {
 
-function saveSession() {
+    const container =
+        document.getElementById(
+            "historyList"
+        );
 
-    if (!currentUser) {
+    const history =
+        getHistory();
+
+    if (!history.length) {
+
+        container.innerHTML = `
+
+            <div class="empty-state">
+
+                <i class="fa-solid fa-clock-rotate-left"></i>
+
+                <p>
+                    Nenhuma movimentação registrada.
+                </p>
+
+            </div>
+
+        `;
+
         return;
-    }
-
-    localStorage.setItem(
-        STORAGE_SESSION,
-        String(currentUser.id)
-    );
-
-}
-
-
-function clearSession() {
-
-    localStorage.removeItem(
-        STORAGE_SESSION
-    );
-
-    currentUser = null;
-
-}
-
-
-async function loadSession() {
-
-    const sessionId =
-        localStorage.getItem(
-            STORAGE_SESSION
-        );
-
-    if (!sessionId) {
-        return;
-    }
-
-    try {
-
-        const userRef =
-            doc(
-                db,
-                USERS_COLLECTION,
-                String(sessionId)
-            );
-
-        const snapshot =
-            await getDoc(userRef);
-
-        if (
-            snapshot.exists()
-        ) {
-
-            currentUser = {
-
-                id: snapshot.id,
-
-                ...snapshot.data()
-
-            };
-
-        } else {
-
-            clearSession();
-
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao carregar sessão:",
-            error
-        );
 
     }
+
+    container.innerHTML =
+        history.map(item => `
+
+            <div class="history-item">
+
+                <div class="history-icon">
+
+                    <i class="fa-solid fa-pen-to-square"></i>
+
+                </div>
+
+                <div class="history-content">
+
+                    <strong>
+                        ${escapeHTML(item.action)}
+                    </strong>
+
+                    <p>
+                        ${escapeHTML(item.description)}
+                    </p>
+
+                    <small>
+
+                        ${escapeHTML(item.userName)}
+
+                        •
+
+                        ${formatDate(item.date)}
+
+                    </small>
+
+                </div>
+
+            </div>
+
+        `).join("");
 
 }
 
@@ -671,77 +527,52 @@ function initLogin() {
 
     form.addEventListener(
         "submit",
-        async function(event) {
+        function(event) {
 
             event.preventDefault();
 
             const username =
-                document
-                    .getElementById(
-                        "loginUsername"
-                    )
-                    .value
-                    .trim();
+                document.getElementById(
+                    "loginUsername"
+                )
+                .value
+                .trim();
 
             const password =
-                document
-                    .getElementById(
-                        "loginPassword"
-                    )
-                    .value;
-
-            const message =
                 document.getElementById(
-                    "loginMessage"
+                    "loginPassword"
+                )
+                .value;
+
+            const users =
+                getUsers();
+
+            const user =
+                users.find(
+                    item =>
+                        item.username
+                            .toLowerCase() ===
+                        username.toLowerCase() &&
+                        item.password ===
+                        password
                 );
 
-            message.textContent =
-                "Verificando...";
+            if (!user) {
 
-            try {
+                document.getElementById(
+                    "loginMessage"
+                ).textContent =
+                    "Usuário ou senha incorretos.";
 
-                const users =
-                    await getUsers();
-
-                const user =
-                    users.find(
-                        item =>
-                            String(
-                                item.username || ""
-                            )
-                                .toLowerCase() ===
-                            username.toLowerCase() &&
-                            item.password ===
-                            password
-                    );
-
-                if (!user) {
-
-                    message.textContent =
-                        "Usuário ou senha incorretos.";
-
-                    return;
-
-                }
-
-                currentUser =
-                    user;
-
-                saveSession();
-
-                message.textContent =
-                    "";
-
-                await showApplication();
-
-            } catch (error) {
-
-                console.error(error);
-
-                message.textContent =
-                    "Erro ao conectar com o banco.";
-
+                return;
             }
+
+            currentUser =
+                user;
+
+            saveSession();
+
+            showApplication();
 
         }
     );
@@ -749,82 +580,56 @@ function initLogin() {
 }
 
 
-/* =====================================================
-   MOSTRAR APLICAÇÃO
-===================================================== */
-
-async function showApplication() {
+function showApplication() {
 
     document
-        .getElementById(
-            "loginScreen"
-        )
-        .classList.add(
-            "hidden"
-        );
+        .getElementById("loginScreen")
+        .classList.add("hidden");
 
     document
-        .getElementById(
-            "app"
-        )
-        .classList.remove(
-            "hidden"
-        );
+        .getElementById("app")
+        .classList.remove("hidden");
 
     updateUserInterface();
 
-    await updateDashboard();
+    updateDashboard();
 
-    await renderDescargas();
+    renderDescargas();
 
-    await renderGastos();
+    renderGastos();
 
-    await renderCash();
+    renderCash();
 
-    await renderHistory();
+    renderHistory();
 
-    await renderUsers();
+    renderUsers();
 
     updateCurrentDate();
 
 }
 
 
-/* =====================================================
-   LOGOUT
-===================================================== */
-
 function logout() {
 
     clearSession();
 
     document
-        .getElementById(
-            "app"
-        )
-        .classList.add(
-            "hidden"
-        );
+        .getElementById("app")
+        .classList.add("hidden");
 
     document
-        .getElementById(
-            "loginScreen"
-        )
-        .classList.remove(
-            "hidden"
-        );
+        .getElementById("loginScreen")
+        .classList.remove("hidden");
 
     document
-        .getElementById(
-            "loginForm"
-        )
+        .getElementById("loginForm")
         .reset();
 
 }
 
 
 /* =====================================================
-   INTERFACE USUÁRIO
+   INTERFACE DO USUÁRIO
 ===================================================== */
 
 function updateUserInterface() {
@@ -834,9 +639,7 @@ function updateUserInterface() {
     }
 
     const initial =
-        getInitial(
-            currentUser.name
-        );
+        getInitial(currentUser.name);
 
     const role =
         currentUser.role === "admin"
@@ -912,10 +715,6 @@ function updateUserInterface() {
 }
 
 
-/* =====================================================
-   DATA ATUAL
-===================================================== */
-
 function updateCurrentDate() {
 
     document.getElementById(
@@ -964,7 +763,7 @@ const pageNames = {
 };
 
 
-async function navigate(page) {
+function navigate(page) {
 
     if (
         page === "usuarios" &&
@@ -977,17 +776,17 @@ async function navigate(page) {
         );
 
         return;
-
     }
 
     document
         .querySelectorAll(".page")
-        .forEach(
-            item =>
-                item.classList.remove(
-                    "active"
-                )
-        );
+        .forEach(item => {
+
+            item.classList.remove(
+                "active"
+            );
+
+        });
 
     const selected =
         document.getElementById(
@@ -1004,12 +803,13 @@ async function navigate(page) {
 
     document
         .querySelectorAll(".menu-item")
-        .forEach(
-            item =>
-                item.classList.remove(
-                    "active"
-                )
-        );
+        .forEach(item => {
+
+            item.classList.remove(
+                "active"
+            );
+
+        });
 
     const menu =
         document.querySelector(
@@ -1033,42 +833,38 @@ async function navigate(page) {
     updateCurrentDate();
 
     document
-        .getElementById(
-            "sidebar"
-        )
-        .classList.remove(
-            "open"
-        );
+        .getElementById("sidebar")
+        .classList.remove("open");
 
     if (page === "dashboard") {
-        await updateDashboard();
+        updateDashboard();
     }
 
     if (page === "descargas") {
-        await renderDescargas();
+        renderDescargas();
     }
 
     if (page === "gastos") {
-        await renderGastos();
+        renderGastos();
     }
 
     if (page === "caixa") {
-        await renderCash();
+        renderCash();
     }
 
     if (page === "historico") {
-        await renderHistory();
+        renderHistory();
     }
 
     if (page === "usuarios") {
-        await renderUsers();
+        renderUsers();
     }
 
 }
 
 
 /* =====================================================
-   FILTRO DE DATA
+   FILTRO POR INTERVALO DE DATAS
 ===================================================== */
 
 function filterByDateRange(
@@ -1087,62 +883,52 @@ function filterByDateRange(
     if (start) {
 
         startDate =
-            new Date(
-                start +
-                "T00:00:00"
-            );
+            new Date(start + "T00:00:00");
 
     }
 
     if (end) {
 
         endDate =
-            new Date(
-                end +
-                "T23:59:59"
-            );
+            new Date(end + "T23:59:59");
 
     }
 
-    return data.filter(
-        item => {
+    return data.filter(item => {
 
-            if (!item.data) {
-                return false;
-            }
-
-            const itemDate =
-                new Date(item.data);
-
-            if (
-                startDate &&
-                itemDate < startDate
-            ) {
-                return false;
-            }
-
-            if (
-                endDate &&
-                itemDate > endDate
-            ) {
-                return false;
-            }
-
-            return true;
-
+        if (!item.data) {
+            return false;
         }
-    );
+
+        const itemDate =
+            new Date(item.data);
+
+        if (
+            startDate &&
+            itemDate < startDate
+        ) {
+            return false;
+        }
+
+        if (
+            endDate &&
+            itemDate > endDate
+        ) {
+            return false;
+        }
+
+        return true;
+
+    });
 
 }
 
 
 /* =====================================================
-   MODAL DESCARGA
+   DESCARGAS
 ===================================================== */
 
-async function openDescargaModal(
-    id = null
-) {
+function openDescargaModal(id = null) {
 
     const modal =
         document.getElementById(
@@ -1150,9 +936,7 @@ async function openDescargaModal(
         );
 
     document
-        .getElementById(
-            "descargaForm"
-        )
+        .getElementById("descargaForm")
         .reset();
 
     document.getElementById(
@@ -1161,28 +945,16 @@ async function openDescargaModal(
 
     if (id) {
 
-        const snapshot =
-            await getDoc(
-                doc(
-                    db,
-                    DESCARGAS_COLLECTION,
+        const item =
+            getDescargas().find(
+                x =>
+                    String(x.id) ===
                     String(id)
-                )
             );
 
-        if (
-            !snapshot.exists()
-        ) {
+        if (!item) {
             return;
         }
-
-        const item = {
-
-            id: snapshot.id,
-
-            ...snapshot.data()
-
-        };
 
         document.getElementById(
             "descargaModalTitle"
@@ -1218,15 +990,13 @@ async function openDescargaModal(
             "descargaValor"
         ).value =
             item.valor
-                ? Number(
-                    item.valor
-                ).toLocaleString(
-                    "pt-BR",
-                    {
-                        minimumFractionDigits:
-                            2
-                    }
-                )
+                ? Number(item.valor)
+                    .toLocaleString(
+                        "pt-BR",
+                        {
+                            minimumFractionDigits: 2
+                        }
+                    )
                 : "";
 
         document.getElementById(
@@ -1248,18 +1018,12 @@ async function openDescargaModal(
 
     }
 
-    modal.classList.add(
-        "show"
-    );
+    modal.classList.add("show");
 
 }
 
 
-/* =====================================================
-   SALVAR DESCARGA
-===================================================== */
-
-async function saveDescarga(event) {
+function saveDescarga(event) {
 
     event.preventDefault();
 
@@ -1304,134 +1068,108 @@ async function saveDescarga(event) {
         ).value
         .trim();
 
-    try {
+    const descargas =
+        getDescargas();
 
-        if (id) {
+    if (id) {
 
-            const ref =
-                doc(
-                    db,
-                    DESCARGAS_COLLECTION,
+        const index =
+            descargas.findIndex(
+                x =>
+                    String(x.id) ===
                     String(id)
-                );
-
-            await updateDoc(
-                ref,
-                {
-
-                    data,
-
-                    fornecedor,
-
-                    transportadora,
-
-                    motorista,
-
-                    valor,
-
-                    observacao,
-
-                    updatedAt:
-                        getNow(),
-
-                    updatedBy:
-                        currentUser.name
-
-                }
             );
 
-            await addHistory(
+        if (index !== -1) {
+
+            descargas[index] = {
+
+                ...descargas[index],
+
+                data,
+
+                fornecedor,
+
+                transportadora,
+
+                motorista,
+
+                valor,
+
+                observacao,
+
+                updatedAt:
+                    new Date().toISOString(),
+
+                updatedBy:
+                    currentUser.name
+
+            };
+
+            addHistory(
                 "Descarga editada",
-                `Descarga de ${
-                    fornecedor ||
-                    "fornecedor não informado"
-                } foi editada.`
-            );
-
-        } else {
-
-            const newId =
-                String(
-                    generateId()
-                );
-
-            await setDoc(
-                doc(
-                    db,
-                    DESCARGAS_COLLECTION,
-                    newId
-                ),
-                {
-
-                    id: newId,
-
-                    data:
-                        data ||
-                        getNow(),
-
-                    fornecedor,
-
-                    transportadora,
-
-                    motorista,
-
-                    valor,
-
-                    observacao,
-
-                    createdAt:
-                        getNow(),
-
-                    createdBy:
-                        currentUser.name,
-
-                    updatedAt:
-                        getNow(),
-
-                    updatedBy:
-                        currentUser.name
-
-                }
-            );
-
-            await addHistory(
-                "Descarga registrada",
-                `Nova descarga ${
-                    fornecedor
-                        ? "do fornecedor " +
-                          fornecedor
-                        : "sem fornecedor informado"
-                } registrada.`
+                `Descarga de ${fornecedor || "fornecedor não informado"} foi editada.`
             );
 
         }
 
-        closeModal(
-            "descargaModal"
-        );
+    } else {
 
-        await renderDescargas();
+        descargas.push({
 
-        await renderCash();
+            id:
+                generateId(),
 
-        await updateDashboard();
+            data:
+                data ||
+                new Date().toISOString(),
 
-        showToast(
-            id
-                ? "Descarga alterada com sucesso."
-                : "Descarga registrada com sucesso."
-        );
+            fornecedor,
 
-    } catch (error) {
+            transportadora,
 
-        console.error(error);
+            motorista,
 
-        showToast(
-            "Erro ao salvar a descarga no Firebase.",
-            "error"
+            valor,
+
+            observacao,
+
+            createdAt:
+                new Date().toISOString(),
+
+            createdBy:
+                currentUser.name,
+
+            updatedAt:
+                new Date().toISOString(),
+
+            updatedBy:
+                currentUser.name
+
+        });
+
+        addHistory(
+            "Descarga registrada",
+            `Nova descarga ${fornecedor ? "do fornecedor " + fornecedor : "sem fornecedor informado"} registrada.`
         );
 
     }
+
+    saveDescargas(descargas);
+
+    closeModal("descargaModal");
+
+    renderDescargas();
+
+    renderCash();
+
+    updateDashboard();
+
+    showToast(
+        id
+            ? "Descarga alterada com sucesso."
+            : "Descarga registrada com sucesso."
+    );
 
 }
 
@@ -1440,19 +1178,15 @@ async function saveDescarga(event) {
    RENDER DESCARGAS
 ===================================================== */
 
-async function renderDescargas() {
+function renderDescargas() {
 
     const tbody =
         document.getElementById(
             "descargasTable"
         );
 
-    if (!tbody) {
-        return;
-    }
-
     let data =
-        await getDescargas();
+        [...getDescargas()];
 
     const start =
         document.getElementById(
@@ -1481,29 +1215,24 @@ async function renderDescargas() {
     if (search) {
 
         data =
-            data.filter(
-                item => {
+            data.filter(item => {
 
-                    const text = [
+                const text = [
 
-                        item.fornecedor,
+                    item.fornecedor,
+                    item.transportadora,
+                    item.motorista,
+                    item.observacao
 
-                        item.transportadora,
+                ]
+                .join(" ")
+                .toLowerCase();
 
-                        item.motorista,
+                return text.includes(
+                    search
+                );
 
-                        item.observacao
-
-                    ]
-                        .join(" ")
-                        .toLowerCase();
-
-                    return text.includes(
-                        search
-                    );
-
-                }
-            );
+            });
 
     }
 
@@ -1517,9 +1246,7 @@ async function renderDescargas() {
         data.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -1531,9 +1258,7 @@ async function renderDescargas() {
     document.getElementById(
         "descargasFilteredTotal"
     ).textContent =
-        formatCurrency(
-            total
-        );
+        formatCurrency(total);
 
     if (!data.length) {
 
@@ -1564,15 +1289,12 @@ async function renderDescargas() {
     }
 
     tbody.innerHTML =
-        data.map(
-            item => `
+        data.map(item => `
 
             <tr>
 
                 <td>
-                    ${formatDate(
-                        item.data
-                    )}
+                    ${formatDate(item.data)}
                 </td>
 
                 <td>
@@ -1654,7 +1376,7 @@ async function renderDescargas() {
 
                         <button
                             class="icon-btn"
-                            onclick="openDescargaModal('${item.id}')"
+                            onclick="openDescargaModal(${item.id})"
                             title="Editar">
 
                             <i class="fa-solid fa-pen"></i>
@@ -1663,7 +1385,7 @@ async function renderDescargas() {
 
                         <button
                             class="icon-btn delete"
-                            onclick="deleteDescarga('${item.id}')"
+                            onclick="deleteDescarga(${item.id})"
                             title="Excluir">
 
                             <i class="fa-solid fa-trash"></i>
@@ -1676,8 +1398,7 @@ async function renderDescargas() {
 
             </tr>
 
-        `
-        ).join("");
+        `).join("");
 
 }
 
@@ -1686,28 +1407,21 @@ async function renderDescargas() {
    EXCLUIR DESCARGA
 ===================================================== */
 
-async function deleteDescarga(id) {
+function deleteDescarga(id) {
 
-    const snapshot =
-        await getDoc(
-            doc(
-                db,
-                DESCARGAS_COLLECTION,
+    const descargas =
+        getDescargas();
+
+    const item =
+        descargas.find(
+            x =>
+                String(x.id) ===
                 String(id)
-            )
         );
 
-    if (!snapshot.exists()) {
+    if (!item) {
         return;
     }
-
-    const item = {
-
-        id: snapshot.id,
-
-        ...snapshot.data()
-
-    };
 
     if (
         !confirm(
@@ -1717,60 +1431,40 @@ async function deleteDescarga(id) {
         return;
     }
 
-    try {
-
-        await deleteDoc(
-            doc(
-                db,
-                DESCARGAS_COLLECTION,
+    saveDescargas(
+        descargas.filter(
+            x =>
+                String(x.id) !==
                 String(id)
-            )
-        );
+        )
+    );
 
-        await addHistory(
-            "Descarga excluída",
-            `Descarga de ${
-                item.fornecedor ||
-                "fornecedor não informado"
-            } foi excluída.`
-        );
+    addHistory(
+        "Descarga excluída",
+        `Descarga de ${item.fornecedor || "fornecedor não informado"} foi excluída.`
+    );
 
-        await renderDescargas();
+    renderDescargas();
 
-        await renderCash();
+    renderCash();
 
-        await updateDashboard();
+    updateDashboard();
 
-        showToast(
-            "Descarga excluída."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Erro ao excluir a descarga.",
-            "error"
-        );
-
-    }
+    showToast(
+        "Descarga excluída."
+    );
 
 }
 
 
 /* =====================================================
-   MODAL GASTO
+   GASTOS
 ===================================================== */
 
-async function openGastoModal(
-    id = null
-) {
+function openGastoModal(id = null) {
 
     document
-        .getElementById(
-            "gastoForm"
-        )
+        .getElementById("gastoForm")
         .reset();
 
     document.getElementById(
@@ -1779,28 +1473,16 @@ async function openGastoModal(
 
     if (id) {
 
-        const snapshot =
-            await getDoc(
-                doc(
-                    db,
-                    GASTOS_COLLECTION,
+        const item =
+            getGastos().find(
+                x =>
+                    String(x.id) ===
                     String(id)
-                )
             );
 
-        if (
-            !snapshot.exists()
-        ) {
+        if (!item) {
             return;
         }
-
-        const item = {
-
-            id: snapshot.id,
-
-            ...snapshot.data()
-
-        };
 
         document.getElementById(
             "gastoModalTitle"
@@ -1831,15 +1513,13 @@ async function openGastoModal(
             "gastoValor"
         ).value =
             item.valor
-                ? Number(
-                    item.valor
-                ).toLocaleString(
-                    "pt-BR",
-                    {
-                        minimumFractionDigits:
-                            2
-                    }
-                )
+                ? Number(item.valor)
+                    .toLocaleString(
+                        "pt-BR",
+                        {
+                            minimumFractionDigits: 2
+                        }
+                    )
                 : "";
 
         document.getElementById(
@@ -1862,21 +1542,13 @@ async function openGastoModal(
     }
 
     document
-        .getElementById(
-            "gastoModal"
-        )
-        .classList.add(
-            "show"
-        );
+        .getElementById("gastoModal")
+        .classList.add("show");
 
 }
 
 
-/* =====================================================
-   SALVAR GASTO
-===================================================== */
-
-async function saveGasto(event) {
+function saveGasto(event) {
 
     event.preventDefault();
 
@@ -1915,125 +1587,104 @@ async function saveGasto(event) {
         ).value
         .trim();
 
-    try {
+    const gastos =
+        getGastos();
 
-        if (id) {
+    if (id) {
 
-            await updateDoc(
-                doc(
-                    db,
-                    GASTOS_COLLECTION,
+        const index =
+            gastos.findIndex(
+                x =>
+                    String(x.id) ===
                     String(id)
-                ),
-                {
-
-                    data,
-
-                    fornecedor,
-
-                    descricao,
-
-                    valor,
-
-                    observacao,
-
-                    updatedAt:
-                        getNow(),
-
-                    updatedBy:
-                        currentUser.name
-
-                }
             );
 
-            await addHistory(
+        if (index !== -1) {
+
+            gastos[index] = {
+
+                ...gastos[index],
+
+                data,
+
+                fornecedor,
+
+                descricao,
+
+                valor,
+
+                observacao,
+
+                updatedAt:
+                    new Date().toISOString(),
+
+                updatedBy:
+                    currentUser.name
+
+            };
+
+            addHistory(
                 "Gasto editado",
-                `O gasto ${
-                    descricao ||
-                    "sem descrição"
-                } foi editado.`
-            );
-
-        } else {
-
-            const newId =
-                String(
-                    generateId()
-                );
-
-            await setDoc(
-                doc(
-                    db,
-                    GASTOS_COLLECTION,
-                    newId
-                ),
-                {
-
-                    id: newId,
-
-                    data:
-                        data ||
-                        getNow(),
-
-                    fornecedor,
-
-                    descricao,
-
-                    valor,
-
-                    observacao,
-
-                    createdAt:
-                        getNow(),
-
-                    createdBy:
-                        currentUser.name,
-
-                    updatedAt:
-                        getNow(),
-
-                    updatedBy:
-                        currentUser.name
-
-                }
-            );
-
-            await addHistory(
-                "Gasto registrado",
-                `Novo gasto ${
-                    descricao ||
-                    "sem descrição"
-                } registrado.`
+                `O gasto ${descricao || "sem descrição"} foi editado.`
             );
 
         }
 
-        closeModal(
-            "gastoModal"
-        );
+    } else {
 
-        await renderGastos();
+        gastos.push({
 
-        await renderCash();
+            id:
+                generateId(),
 
-        await updateDashboard();
+            data:
+                data ||
+                new Date().toISOString(),
 
-        showToast(
-            id
-                ? "Gasto alterado com sucesso."
-                : "Gasto registrado com sucesso."
-        );
+            fornecedor,
 
-    } catch (error) {
+            descricao,
 
-        console.error(error);
+            valor,
 
-        showToast(
-            "Erro ao salvar o gasto no Firebase.",
-            "error"
+            observacao,
+
+            createdAt:
+                new Date().toISOString(),
+
+            createdBy:
+                currentUser.name,
+
+            updatedAt:
+                new Date().toISOString(),
+
+            updatedBy:
+                currentUser.name
+
+        });
+
+        addHistory(
+            "Gasto registrado",
+            `Novo gasto ${descricao || "sem descrição"} registrado.`
         );
 
     }
+
+    saveGastos(gastos);
+
+    closeModal("gastoModal");
+
+    renderGastos();
+
+    renderCash();
+
+    updateDashboard();
+
+    showToast(
+        id
+            ? "Gasto alterado com sucesso."
+            : "Gasto registrado com sucesso."
+    );
 
 }
 
@@ -2042,7 +1693,7 @@ async function saveGasto(event) {
    RENDER GASTOS
 ===================================================== */
 
-async function renderGastos() {
+function renderGastos() {
 
     const tbody =
         document.getElementById(
@@ -2050,7 +1701,7 @@ async function renderGastos() {
         );
 
     let data =
-        await getGastos();
+        [...getGastos()];
 
     const start =
         document.getElementById(
@@ -2079,27 +1730,23 @@ async function renderGastos() {
     if (search) {
 
         data =
-            data.filter(
-                item => {
+            data.filter(item => {
 
-                    const text = [
+                const text = [
 
-                        item.descricao,
+                    item.descricao,
+                    item.fornecedor,
+                    item.observacao
 
-                        item.fornecedor,
+                ]
+                .join(" ")
+                .toLowerCase();
 
-                        item.observacao
+                return text.includes(
+                    search
+                );
 
-                    ]
-                        .join(" ")
-                        .toLowerCase();
-
-                    return text.includes(
-                        search
-                    );
-
-                }
-            );
+            });
 
     }
 
@@ -2113,9 +1760,7 @@ async function renderGastos() {
         data.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2127,9 +1772,7 @@ async function renderGastos() {
     document.getElementById(
         "gastosFilteredTotal"
     ).textContent =
-        formatCurrency(
-            total
-        );
+        formatCurrency(total);
 
     if (!data.length) {
 
@@ -2160,15 +1803,12 @@ async function renderGastos() {
     }
 
     tbody.innerHTML =
-        data.map(
-            item => `
+        data.map(item => `
 
             <tr>
 
                 <td>
-                    ${formatDate(
-                        item.data
-                    )}
+                    ${formatDate(item.data)}
                 </td>
 
                 <td>
@@ -2193,8 +1833,7 @@ async function renderGastos() {
 
                     <strong class="activity-value negative">
 
-                        -
-                        ${formatCurrency(
+                        - ${formatCurrency(
                             item.valor
                         )}
 
@@ -2250,7 +1889,7 @@ async function renderGastos() {
 
                         <button
                             class="icon-btn"
-                            onclick="openGastoModal('${item.id}')">
+                            onclick="openGastoModal(${item.id})">
 
                             <i class="fa-solid fa-pen"></i>
 
@@ -2258,7 +1897,7 @@ async function renderGastos() {
 
                         <button
                             class="icon-btn delete"
-                            onclick="deleteGasto('${item.id}')">
+                            onclick="deleteGasto(${item.id})">
 
                             <i class="fa-solid fa-trash"></i>
 
@@ -2270,8 +1909,7 @@ async function renderGastos() {
 
             </tr>
 
-        `
-        ).join("");
+        `).join("");
 
 }
 
@@ -2280,28 +1918,21 @@ async function renderGastos() {
    EXCLUIR GASTO
 ===================================================== */
 
-async function deleteGasto(id) {
+function deleteGasto(id) {
 
-    const snapshot =
-        await getDoc(
-            doc(
-                db,
-                GASTOS_COLLECTION,
+    const gastos =
+        getGastos();
+
+    const item =
+        gastos.find(
+            x =>
+                String(x.id) ===
                 String(id)
-            )
         );
 
-    if (!snapshot.exists()) {
+    if (!item) {
         return;
     }
-
-    const item = {
-
-        id: snapshot.id,
-
-        ...snapshot.data()
-
-    };
 
     if (
         !confirm(
@@ -2311,44 +1942,28 @@ async function deleteGasto(id) {
         return;
     }
 
-    try {
-
-        await deleteDoc(
-            doc(
-                db,
-                GASTOS_COLLECTION,
+    saveGastos(
+        gastos.filter(
+            x =>
+                String(x.id) !==
                 String(id)
-            )
-        );
+        )
+    );
 
-        await addHistory(
-            "Gasto excluído",
-            `O gasto ${
-                item.descricao ||
-                "sem descrição"
-            } foi excluído.`
-        );
+    addHistory(
+        "Gasto excluído",
+        `O gasto ${item.descricao || "sem descrição"} foi excluído.`
+    );
 
-        await renderGastos();
+    renderGastos();
 
-        await renderCash();
+    renderCash();
 
-        await updateDashboard();
+    updateDashboard();
 
-        showToast(
-            "Gasto excluído."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Erro ao excluir o gasto.",
-            "error"
-        );
-
-    }
+    showToast(
+        "Gasto excluído."
+    );
 
 }
 
@@ -2357,21 +1972,19 @@ async function deleteGasto(id) {
    CAIXA
 ===================================================== */
 
-async function renderCash() {
+function renderCash() {
 
     const descargas =
-        await getDescargas();
+        getDescargas();
 
     const gastos =
-        await getGastos();
+        getGastos();
 
     const entradas =
         descargas.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2379,9 +1992,7 @@ async function renderCash() {
         gastos.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2391,83 +2002,69 @@ async function renderCash() {
     document.getElementById(
         "cashEntradas"
     ).textContent =
-        formatCurrency(
-            entradas
-        );
+        formatCurrency(entradas);
 
     document.getElementById(
         "cashSaidas"
     ).textContent =
-        formatCurrency(
-            saidas
-        );
+        formatCurrency(saidas);
 
     document.getElementById(
         "cashSaldo"
     ).textContent =
-        formatCurrency(
-            saldo
-        );
+        formatCurrency(saldo);
 
     const movements = [];
 
-    descargas.forEach(
-        item => {
+    descargas.forEach(item => {
 
-            movements.push({
+        movements.push({
 
-                data: item.data,
+            data: item.data,
 
-                tipo: "Entrada",
+            tipo: "Entrada",
 
-                descricao:
-                    `Descarga - ${
-                        item.fornecedor ||
-                        "Fornecedor não informado"
-                    }`,
+            descricao:
+                `Descarga - ${
+                    item.fornecedor ||
+                    "Fornecedor não informado"
+                }`,
 
-                responsavel:
-                    item.createdBy || "-",
+            responsavel:
+                item.createdBy || "-",
 
-                valor:
-                    Number(
-                        item.valor || 0
-                    ),
+            valor:
+                Number(item.valor || 0),
 
-                positive: true
+            positive: true
 
-            });
+        });
 
-        }
-    );
+    });
 
-    gastos.forEach(
-        item => {
+    gastos.forEach(item => {
 
-            movements.push({
+        movements.push({
 
-                data: item.data,
+            data: item.data,
 
-                tipo: "Saída",
+            tipo: "Saída",
 
-                descricao:
-                    item.descricao ||
-                    "Gasto",
+            descricao:
+                item.descricao ||
+                "Gasto",
 
-                responsavel:
-                    item.createdBy || "-",
+            responsavel:
+                item.createdBy || "-",
 
-                valor:
-                    Number(
-                        item.valor || 0
-                    ),
+            valor:
+                Number(item.valor || 0),
 
-                positive: false
+            positive: false
 
-            });
+        });
 
-        }
-    );
+    });
 
     movements.sort(
         (a, b) =>
@@ -2509,15 +2106,12 @@ async function renderCash() {
     }
 
     tbody.innerHTML =
-        movements.map(
-            item => `
+        movements.map(item => `
 
             <tr>
 
                 <td>
-                    ${formatDate(
-                        item.data
-                    )}
+                    ${formatDate(item.data)}
                 </td>
 
                 <td>
@@ -2562,8 +2156,7 @@ async function renderCash() {
 
             </tr>
 
-        `
-        ).join("");
+        `).join("");
 
 }
 
@@ -2575,24 +2168,19 @@ async function renderCash() {
 let financeChart = null;
 
 
-async function updateDashboard() {
+function updateDashboard() {
 
     const descargas =
-        await getDescargas();
+        getDescargas();
 
     const gastos =
-        await getGastos();
-
-    const users =
-        await getUsers();
+        getGastos();
 
     const totalDescargas =
         descargas.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2600,9 +2188,7 @@ async function updateDashboard() {
         gastos.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2644,19 +2230,17 @@ async function updateDashboard() {
     const fornecedores =
         new Set();
 
-    descargas.forEach(
-        item => {
+    descargas.forEach(item => {
 
-            if (item.fornecedor) {
+        if (item.fornecedor) {
 
-                fornecedores.add(
-                    item.fornecedor.trim()
-                );
-
-            }
+            fornecedores.add(
+                item.fornecedor.trim()
+            );
 
         }
-    );
+
+    });
 
     document.getElementById(
         "summaryFornecedores"
@@ -2671,7 +2255,7 @@ async function updateDashboard() {
     document.getElementById(
         "summaryUsuarios"
     ).textContent =
-        users.length;
+        getUsers().length;
 
 
     /* ÚLTIMAS DESCARGAS */
@@ -2723,16 +2307,20 @@ async function updateDashboard() {
                     <div class="activity-info">
 
                         <strong>
+
                             ${escapeHTML(
                                 item.fornecedor ||
                                 "Fornecedor não informado"
                             )}
+
                         </strong>
 
                         <small>
+
                             ${formatDate(
                                 item.data
                             )}
+
                         </small>
 
                     </div>
@@ -2802,24 +2390,27 @@ async function updateDashboard() {
                     <div class="activity-info">
 
                         <strong>
+
                             ${escapeHTML(
                                 item.descricao ||
                                 "Gasto"
                             )}
+
                         </strong>
 
                         <small>
+
                             ${formatDate(
                                 item.data
                             )}
+
                         </small>
 
                     </div>
 
                     <strong class="activity-value negative">
 
-                        -
-                        ${formatCurrency(
+                        - ${formatCurrency(
                             item.valor
                         )}
 
@@ -2862,9 +2453,7 @@ function updateFinanceChart(
         descargas.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2872,9 +2461,7 @@ function updateFinanceChart(
         gastos.reduce(
             (sum, item) =>
                 sum +
-                Number(
-                    item.valor || 0
-                ),
+                Number(item.valor || 0),
             0
         );
 
@@ -2920,8 +2507,7 @@ function updateFinanceChart(
 
                     responsive: true,
 
-                    maintainAspectRatio:
-                        false,
+                    maintainAspectRatio: false,
 
                     plugins: {
 
@@ -2966,7 +2552,7 @@ function updateFinanceChart(
    USUÁRIOS
 ===================================================== */
 
-async function renderUsers() {
+function renderUsers() {
 
     const container =
         document.getElementById(
@@ -2984,7 +2570,7 @@ async function renderUsers() {
     }
 
     const users =
-        await getUsers();
+        getUsers();
 
     container.innerHTML =
         users.map(
@@ -3036,7 +2622,7 @@ async function renderUsers() {
 
                     <button
                         class="btn-secondary"
-                        onclick="editUser('${user.id}')">
+                        onclick="editUser(${user.id})">
 
                         <i class="fa-solid fa-pen"></i>
 
@@ -3051,7 +2637,7 @@ async function renderUsers() {
 
                             <button
                                 class="icon-btn delete"
-                                onclick="deleteUser('${user.id}')">
+                                onclick="deleteUser(${user.id})">
 
                                 <i class="fa-solid fa-trash"></i>
 
@@ -3071,18 +2657,10 @@ async function renderUsers() {
 }
 
 
-/* =====================================================
-   MODAL USUÁRIO
-===================================================== */
-
-async function openUserModal(
-    id = null
-) {
+function openUserModal(id = null) {
 
     document
-        .getElementById(
-            "userForm"
-        )
+        .getElementById("userForm")
         .reset();
 
     document.getElementById(
@@ -3091,28 +2669,16 @@ async function openUserModal(
 
     if (id) {
 
-        const snapshot =
-            await getDoc(
-                doc(
-                    db,
-                    USERS_COLLECTION,
+        const user =
+            getUsers().find(
+                x =>
+                    String(x.id) ===
                     String(id)
-                )
             );
 
-        if (
-            !snapshot.exists()
-        ) {
+        if (!user) {
             return;
         }
-
-        const user = {
-
-            id: snapshot.id,
-
-            ...snapshot.data()
-
-        };
 
         document.getElementById(
             "userModalTitle"
@@ -3149,12 +2715,8 @@ async function openUserModal(
     }
 
     document
-        .getElementById(
-            "userModal"
-        )
-        .classList.add(
-            "show"
-        );
+        .getElementById("userModal")
+        .classList.add("show");
 
 }
 
@@ -3172,11 +2734,7 @@ function editUser(id) {
 }
 
 
-/* =====================================================
-   SALVAR USUÁRIO
-===================================================== */
-
-async function saveUser(event) {
+function saveUser(event) {
 
     event.preventDefault();
 
@@ -3231,74 +2789,64 @@ async function saveUser(event) {
 
     }
 
-    try {
+    const users =
+        getUsers();
 
-        const users =
-            await getUsers();
+    const usernameExists =
+        users.some(
+            user =>
+                user.username
+                    .toLowerCase() ===
+                username.toLowerCase() &&
+                String(user.id) !==
+                String(id)
+        );
 
-        const usernameExists =
-            users.some(
-                user =>
-                    String(
-                        user.username || ""
-                    )
-                        .toLowerCase() ===
-                    username.toLowerCase() &&
-                    String(user.id) !==
+    if (usernameExists) {
+
+        showToast(
+            "Este usuário já existe.",
+            "error"
+        );
+
+        return;
+
+    }
+
+    if (id) {
+
+        const index =
+            users.findIndex(
+                x =>
+                    String(x.id) ===
                     String(id)
             );
 
-        if (usernameExists) {
+        if (index !== -1) {
 
-            showToast(
-                "Este usuário já existe.",
-                "error"
-            );
+            users[index].name =
+                name;
 
-            return;
+            users[index].username =
+                username;
 
-        }
-
-        if (id) {
-
-            const updateData = {
-
-                name,
-
-                username,
-
-                role
-
-            };
+            users[index].role =
+                role;
 
             if (password) {
 
-                updateData.password =
+                users[index].password =
                     password;
 
             }
-
-            await updateDoc(
-                doc(
-                    db,
-                    USERS_COLLECTION,
-                    String(id)
-                ),
-                updateData
-            );
 
             if (
                 String(currentUser.id) ===
                 String(id)
             ) {
 
-                currentUser = {
-
-                    ...currentUser,
-
-                    ...updateData
-
-                };
+                currentUser =
+                    users[index];
 
                 saveSession();
 
@@ -3306,93 +2854,69 @@ async function saveUser(event) {
 
             }
 
-            await addHistory(
+            addHistory(
                 "Usuário editado",
                 `O usuário ${name} foi alterado pelo administrador.`
             );
 
-        } else {
+        }
 
-            if (!password) {
+    } else {
 
-                showToast(
-                    "Informe uma senha para o novo usuário.",
-                    "error"
-                );
+        if (!password) {
 
-                return;
-
-            }
-
-            const newId =
-                String(
-                    generateId()
-                );
-
-            await setDoc(
-                doc(
-                    db,
-                    USERS_COLLECTION,
-                    newId
-                ),
-                {
-
-                    id: newId,
-
-                    name,
-
-                    username,
-
-                    password,
-
-                    role,
-
-                    createdAt:
-                        getNow()
-
-                }
+            showToast(
+                "Informe uma senha para o novo usuário.",
+                "error"
             );
 
-            await addHistory(
-                "Usuário criado",
-                `O usuário ${name} foi criado.`
-            );
+            return;
 
         }
 
-        closeModal(
-            "userModal"
-        );
+        users.push({
 
-        await renderUsers();
+            id:
+                generateId(),
 
-        await updateDashboard();
+            name,
 
-        showToast(
-            id
-                ? "Usuário alterado."
-                : "Usuário criado."
-        );
+            username,
 
-    } catch (error) {
+            password,
 
-        console.error(error);
+            role,
 
-        showToast(
-            "Erro ao salvar usuário no Firebase.",
-            "error"
+            createdAt:
+                new Date().toISOString()
+
+        });
+
+        addHistory(
+            "Usuário criado",
+            `O usuário ${name} foi criado.`
         );
 
     }
 
+    saveUsers(users);
+
+    closeModal("userModal");
+
+    renderUsers();
+
+    updateDashboard();
+
+    showToast(
+        id
+            ? "Usuário alterado."
+            : "Usuário criado."
+    );
+
 }
 
 
-/* =====================================================
-   EXCLUIR USUÁRIO
-===================================================== */
-
-async function deleteUser(id) {
+function deleteUser(id) {
 
     if (
         currentUser?.role !== "admin"
@@ -3414,26 +2938,19 @@ async function deleteUser(id) {
 
     }
 
-    const snapshot =
-        await getDoc(
-            doc(
-                db,
-                USERS_COLLECTION,
+    const users =
+        getUsers();
+
+    const user =
+        users.find(
+            x =>
+                String(x.id) ===
                 String(id)
-            )
         );
 
-    if (!snapshot.exists()) {
+    if (!user) {
         return;
     }
-
-    const user = {
-
-        id: snapshot.id,
-
-        ...snapshot.data()
-
-    };
 
     if (
         !confirm(
@@ -3443,39 +2960,26 @@ async function deleteUser(id) {
         return;
     }
 
-    try {
-
-        await deleteDoc(
-            doc(
-                db,
-                USERS_COLLECTION,
+    saveUsers(
+        users.filter(
+            x =>
+                String(x.id) !==
                 String(id)
-            )
-        );
+        )
+    );
 
-        await addHistory(
-            "Usuário excluído",
-            `O usuário ${user.name} foi excluído.`
-        );
+    addHistory(
+        "Usuário excluído",
+        `O usuário ${user.name} foi excluído.`
+    );
 
-        await renderUsers();
+    renderUsers();
 
-        await updateDashboard();
+    updateDashboard();
 
-        showToast(
-            "Usuário excluído."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Erro ao excluir usuário.",
-            "error"
-        );
-
-    }
+    showToast(
+        "Usuário excluído."
+    );
 
 }
 
@@ -3484,9 +2988,7 @@ async function deleteUser(id) {
    ALTERAR SENHA
 ===================================================== */
 
-async function changePassword(
-    event
-) {
+function changePassword(event) {
 
     event.preventDefault();
 
@@ -3547,56 +3049,44 @@ async function changePassword(
 
     }
 
-    try {
+    const users =
+        getUsers();
 
-        await updateDoc(
-            doc(
-                db,
-                USERS_COLLECTION,
-                String(
-                    currentUser.id
-                )
-            ),
-            {
-
-                password:
-                    newPassword
-
-            }
+    const index =
+        users.findIndex(
+            x =>
+                String(x.id) ===
+                String(currentUser.id)
         );
 
-        currentUser.password =
-            newPassword;
-
-        saveSession();
-
-        await addHistory(
-            "Senha alterada",
-            `A senha do usuário ${
-                currentUser.name
-            } foi alterada.`
-        );
-
-        document
-            .getElementById(
-                "changePasswordForm"
-            )
-            .reset();
-
-        showToast(
-            "Senha alterada com sucesso."
-        );
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Erro ao alterar senha.",
-            "error"
-        );
-
+    if (index === -1) {
+        return;
     }
+
+    users[index].password =
+        newPassword;
+
+    currentUser =
+        users[index];
+
+    saveUsers(users);
+
+    saveSession();
+
+    addHistory(
+        "Senha alterada",
+        `A senha do usuário ${currentUser.name} foi alterada.`
+    );
+
+    document
+        .getElementById(
+            "changePasswordForm"
+        )
+        .reset();
+
+    showToast(
+        "Senha alterada com sucesso."
+    );
 
 }
 
@@ -3608,9 +3098,7 @@ async function changePassword(
 function closeModal(id) {
 
     const modal =
-        document.getElementById(
-            id
-        );
+        document.getElementById(id);
 
     if (modal) {
 
@@ -3624,94 +3112,6 @@ function closeModal(id) {
 
 
 /* =====================================================
-   HISTÓRICO
-===================================================== */
-
-async function renderHistory() {
-
-    const container =
-        document.getElementById(
-            "historyList"
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const history =
-        await getHistory();
-
-    if (!history.length) {
-
-        container.innerHTML = `
-
-            <div class="empty-state">
-
-                <i class="fa-solid fa-clock-rotate-left"></i>
-
-                <p>
-                    Nenhuma movimentação registrada.
-                </p>
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-    container.innerHTML =
-        history.map(
-            item => `
-
-            <div class="history-item">
-
-                <div class="history-icon">
-
-                    <i class="fa-solid fa-pen-to-square"></i>
-
-                </div>
-
-                <div class="history-content">
-
-                    <strong>
-                        ${escapeHTML(
-                            item.action
-                        )}
-                    </strong>
-
-                    <p>
-                        ${escapeHTML(
-                            item.description
-                        )}
-                    </p>
-
-                    <small>
-
-                        ${escapeHTML(
-                            item.userName
-                        )}
-
-                        •
-
-                        ${formatDate(
-                            item.date
-                        )}
-
-                    </small>
-
-                </div>
-
-            </div>
-
-        `
-        ).join("");
-
-}
-
-
-/* =====================================================
    EVENTOS
 ===================================================== */
 
@@ -3720,439 +3120,520 @@ document.addEventListener(
     async function() {
 
         try {
-
-            /*
-             * Primeiro garante que o
-             * administrador exista.
-             */
-
-            await initializeAdmin();
-
-            /*
-             * Depois recupera a sessão.
-             */
-
-            await loadSession();
-
-            /*
-             * Inicializa login.
-             */
-
-            initLogin();
-
-
-            /* LOGIN AUTOMÁTICO */
-
-            if (currentUser) {
-
-                await showApplication();
-
-            }
-
-
-            /* MENU */
-
-            document
-                .querySelectorAll(
-                    ".menu-item"
-                )
-                .forEach(
-                    button => {
-
-                        button.addEventListener(
-                            "click",
-                            function() {
-
-                                if (
-                                    this.dataset.page
-                                ) {
-
-                                    navigate(
-                                        this.dataset.page
-                                    );
-
-                                }
-
-                            }
-                        );
-
-                    }
-                );
-
-
-            /* LINKS INTERNOS */
-
-            document
-                .querySelectorAll(
-                    "[data-page-link]"
-                )
-                .forEach(
-                    button => {
-
-                        button.addEventListener(
-                            "click",
-                            function() {
-
-                                navigate(
-                                    this.dataset.pageLink
-                                );
-
-                            }
-                        );
-
-                    }
-                );
-
-
-            /* SIDEBAR */
-
-            document
-                .getElementById(
-                    "openSidebar"
-                )
-                .addEventListener(
-                    "click",
-                    function() {
-
-                        document
-                            .getElementById(
-                                "sidebar"
-                            )
-                            .classList.add(
-                                "open"
-                            );
-
-                    }
-                );
-
-
-            document
-                .getElementById(
-                    "closeSidebar"
-                )
-                .addEventListener(
-                    "click",
-                    function() {
-
-                        document
-                            .getElementById(
-                                "sidebar"
-                            )
-                            .classList.remove(
-                                "open"
-                            );
-
-                    }
-                );
-
-
-            /* LOGOUT */
-
-            document
-                .getElementById(
-                    "logoutBtn"
-                )
-                .addEventListener(
-                    "click",
-                    logout
-                );
-
-
-            /* DESCARGA */
-
-            document
-                .getElementById(
-                    "newDescargaBtn"
-                )
-                .addEventListener(
-                    "click",
-                    () =>
-                        openDescargaModal()
-                );
-
-
-            document
-                .getElementById(
-                    "descargaForm"
-                )
-                .addEventListener(
-                    "submit",
-                    saveDescarga
-                );
-
-
-            /* GASTO */
-
-            document
-                .getElementById(
-                    "newGastoBtn"
-                )
-                .addEventListener(
-                    "click",
-                    () =>
-                        openGastoModal()
-                );
-
-
-            document
-                .getElementById(
-                    "gastoForm"
-                )
-                .addEventListener(
-                    "submit",
-                    saveGasto
-                );
-
-
-            /* USUÁRIO */
-
-            document
-                .getElementById(
-                    "newUserBtn"
-                )
-                .addEventListener(
-                    "click",
-                    () =>
-                        openUserModal()
-                );
-
-
-            document
-                .getElementById(
-                    "userForm"
-                )
-                .addEventListener(
-                    "submit",
-                    saveUser
-                );
-
-
-            /* SENHA */
-
-            document
-                .getElementById(
-                    "changePasswordForm"
-                )
-                .addEventListener(
-                    "submit",
-                    changePassword
-                );
-
-
-            /* FECHAR MODAIS */
-
-            document
-                .querySelectorAll(
-                    "[data-close]"
-                )
-                .forEach(
-                    button => {
-
-                        button.addEventListener(
-                            "click",
-                            function() {
-
-                                closeModal(
-                                    this.dataset.close
-                                );
-
-                            }
-                        );
-
-                    }
-                );
-
-
-            /* =================================================
-               FILTROS DESCARGAS
-            ================================================= */
-
-            document
-                .getElementById(
-                    "filterDescargaStart"
-                )
-                .addEventListener(
-                    "change",
-                    renderDescargas
-                );
-
-            document
-                .getElementById(
-                    "filterDescargaEnd"
-                )
-                .addEventListener(
-                    "change",
-                    renderDescargas
-                );
-
-            document
-                .getElementById(
-                    "filterDescargaSearch"
-                )
-                .addEventListener(
-                    "input",
-                    renderDescargas
-                );
-
-            document
-                .getElementById(
-                    "clearDescargaFilters"
-                )
-                .addEventListener(
-                    "click",
-                    function() {
-
-                        document.getElementById(
-                            "filterDescargaStart"
-                        ).value = "";
-
-                        document.getElementById(
-                            "filterDescargaEnd"
-                        ).value = "";
-
-                        document.getElementById(
-                            "filterDescargaSearch"
-                        ).value = "";
-
-                        renderDescargas();
-
-                    }
-                );
-
-
-            /* =================================================
-               FILTROS GASTOS
-            ================================================= */
-
-            document
-                .getElementById(
-                    "filterGastoStart"
-                )
-                .addEventListener(
-                    "change",
-                    renderGastos
-                );
-
-            document
-                .getElementById(
-                    "filterGastoEnd"
-                )
-                .addEventListener(
-                    "change",
-                    renderGastos
-                );
-
-            document
-                .getElementById(
-                    "filterGastoSearch"
-                )
-                .addEventListener(
-                    "input",
-                    renderGastos
-                );
-
-            document
-                .getElementById(
-                    "clearGastoFilters"
-                )
-                .addEventListener(
-                    "click",
-                    function() {
-
-                        document.getElementById(
-                            "filterGastoStart"
-                        ).value = "";
-
-                        document.getElementById(
-                            "filterGastoEnd"
-                        ).value = "";
-
-                        document.getElementById(
-                            "filterGastoSearch"
-                        ).value = "";
-
-                        renderGastos();
-
-                    }
-                );
-
-
-            /* =================================================
-               MÁSCARA DINHEIRO
-            ================================================= */
-
-            document
-                .querySelectorAll(
-                    "#descargaValor, #gastoValor"
-                )
-                .forEach(
-                    input => {
-
-                        input.addEventListener(
-                            "input",
-                            function() {
-
-                                let value =
-                                    this.value
-                                        .replace(
-                                            /\D/g,
-                                            ""
-                                        );
-
-                                if (!value) {
-
-                                    this.value =
-                                        "";
-
-                                    return;
-
-                                }
-
-                                value =
-                                    (
-                                        Number(
-                                            value
-                                        ) / 100
-                                    ).toLocaleString(
-                                        "pt-BR",
-                                        {
-                                            minimumFractionDigits:
-                                                2
-                                        }
-                                    );
-
-                                this.value =
-                                    value;
-
-                            }
-                        );
-
-                    }
-                );
-
-
-            console.log(
-                "DISLAM conectado ao Firebase."
-            );
-
+            await initializeCloudData();
         } catch (error) {
-
-            console.error(
-                "Erro ao iniciar sistema:",
-                error
-            );
-
+            console.error("Erro ao carregar o Firestore:", error);
             showToast(
-                "Erro ao iniciar o sistema.",
+                "Não foi possível conectar ao Firebase. Verifique as regras do Firestore.",
                 "error"
             );
+            return;
+        }
+
+        getUsers();
+
+        loadSession();
+
+        initLogin();
+
+
+        /* LOGIN AUTOMÁTICO */
+
+        if (currentUser) {
+
+            showApplication();
 
         }
 
+
+        /* MENU */
+
+        document
+            .querySelectorAll(".menu-item")
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    function() {
+
+                        if (
+                            this.dataset.page
+                        ) {
+
+                            navigate(
+                                this.dataset.page
+                            );
+
+                        }
+
+                    }
+                );
+
+            });
+
+
+        document
+            .querySelectorAll("[data-page-link]")
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    function() {
+
+                        navigate(
+                            this.dataset.pageLink
+                        );
+
+                    }
+                );
+
+            });
+
+
+        /* SIDEBAR */
+
+        document
+            .getElementById("openSidebar")
+            .addEventListener(
+                "click",
+                function() {
+
+                    document
+                        .getElementById(
+                            "sidebar"
+                        )
+                        .classList.add(
+                            "open"
+                        );
+
+                }
+            );
+
+
+        document
+            .getElementById("closeSidebar")
+            .addEventListener(
+                "click",
+                function() {
+
+                    document
+                        .getElementById(
+                            "sidebar"
+                        )
+                        .classList.remove(
+                            "open"
+                        );
+
+                }
+            );
+
+
+        /* LOGOUT */
+
+        document
+            .getElementById("logoutBtn")
+            .addEventListener(
+                "click",
+                logout
+            );
+
+
+        /* DESCARGA */
+
+        document
+            .getElementById("newDescargaBtn")
+            .addEventListener(
+                "click",
+                () =>
+                    openDescargaModal()
+            );
+
+
+        document
+            .getElementById("descargaForm")
+            .addEventListener(
+                "submit",
+                saveDescarga
+            );
+
+
+        /* GASTO */
+
+        document
+            .getElementById("newGastoBtn")
+            .addEventListener(
+                "click",
+                () =>
+                    openGastoModal()
+            );
+
+
+        document
+            .getElementById("gastoForm")
+            .addEventListener(
+                "submit",
+                saveGasto
+            );
+
+
+        /* USUÁRIO */
+
+        document
+            .getElementById("newUserBtn")
+            .addEventListener(
+                "click",
+                () =>
+                    openUserModal()
+            );
+
+
+        document
+            .getElementById("userForm")
+            .addEventListener(
+                "submit",
+                saveUser
+            );
+
+
+        /* SENHA */
+
+        document
+            .getElementById(
+                "changePasswordForm"
+            )
+            .addEventListener(
+                "submit",
+                changePassword
+            );
+
+
+        /* FECHAR MODAIS */
+
+        document
+            .querySelectorAll("[data-close]")
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    function() {
+
+                        closeModal(
+                            this.dataset.close
+                        );
+
+                    }
+                );
+
+            });
+
+
+        /* =================================================
+           ENTER NÃO SALVA DESCARGA/GASTO
+        ================================================= */
+
+        ["descargaForm", "gastoForm"].forEach(function(formId) {
+
+            const form = document.getElementById(formId);
+
+            if (!form) return;
+
+            form.addEventListener("keydown", function(event) {
+
+                /* Enter dentro de textarea continua funcionando. */
+                if (
+                    event.key === "Enter" &&
+                    event.target.tagName !== "TEXTAREA" &&
+                    event.target.tagName !== "BUTTON"
+                ) {
+                    event.preventDefault();
+                }
+
+            });
+
+        });
+
+
+        /* =================================================
+           FILTROS DE DESCARGAS
+        ================================================= */
+
+        document
+            .getElementById(
+                "filterDescargaStart"
+            )
+            .addEventListener(
+                "change",
+                renderDescargas
+            );
+
+        document
+            .getElementById(
+                "filterDescargaEnd"
+            )
+            .addEventListener(
+                "change",
+                renderDescargas
+            );
+
+        document
+            .getElementById(
+                "filterDescargaSearch"
+            )
+            .addEventListener(
+                "input",
+                renderDescargas
+            );
+
+        document
+            .getElementById(
+                "clearDescargaFilters"
+            )
+            .addEventListener(
+                "click",
+                function() {
+
+                    document.getElementById(
+                        "filterDescargaStart"
+                    ).value = "";
+
+                    document.getElementById(
+                        "filterDescargaEnd"
+                    ).value = "";
+
+                    document.getElementById(
+                        "filterDescargaSearch"
+                    ).value = "";
+
+                    renderDescargas();
+
+                }
+            );
+
+
+        /* =================================================
+           FILTROS DE GASTOS
+        ================================================= */
+
+        document
+            .getElementById(
+                "filterGastoStart"
+            )
+            .addEventListener(
+                "change",
+                renderGastos
+            );
+
+        document
+            .getElementById(
+                "filterGastoEnd"
+            )
+            .addEventListener(
+                "change",
+                renderGastos
+            );
+
+        document
+            .getElementById(
+                "filterGastoSearch"
+            )
+            .addEventListener(
+                "input",
+                renderGastos
+            );
+
+        document
+            .getElementById(
+                "clearGastoFilters"
+            )
+            .addEventListener(
+                "click",
+                function() {
+
+                    document.getElementById(
+                        "filterGastoStart"
+                    ).value = "";
+
+                    document.getElementById(
+                        "filterGastoEnd"
+                    ).value = "";
+
+                    document.getElementById(
+                        "filterGastoSearch"
+                    ).value = "";
+
+                    renderGastos();
+
+                }
+            );
+
+
+        /* =================================================
+           MÁSCARA DE DINHEIRO
+        ================================================= */
+
+        document
+            .querySelectorAll(
+                "#descargaValor, #gastoValor"
+            )
+            .forEach(input => {
+
+                input.addEventListener(
+                    "input",
+                    function() {
+
+                        let value =
+                            this.value
+                                .replace(/\D/g, "");
+
+                        if (!value) {
+
+                            this.value = "";
+
+                            return;
+
+                        }
+
+                        value =
+                            (
+                                Number(value) /
+                                100
+                            ).toLocaleString(
+                                "pt-BR",
+                                {
+                                    minimumFractionDigits: 2
+                                }
+                            );
+
+                        this.value =
+                            value;
+
+                    }
+                );
+
+            });
+
     }
 );
-window.testFirebase = {
-    db,
-    getDescargas,
-    getGastos
-};
+/* =====================================================
+   FUNÇÕES GLOBAIS DOS BOTÕES
+   Necessário porque o script usa type="module"
+===================================================== */
+
+window.openDescargaModal = openDescargaModal;
+window.saveDescarga = saveDescarga;
+window.deleteDescarga = deleteDescarga;
+
+window.openGastoModal = openGastoModal;
+window.saveGasto = saveGasto;
+window.deleteGasto = deleteGasto;
+
+window.openUserModal = openUserModal;
+window.editUser = editUser;
+window.saveUser = saveUser;
+window.deleteUser = deleteUser;
+
+
+/* =====================================================
+   ENTER = PRÓXIMO CAMPO
+   Impede que o Enter envie o formulário
+===================================================== */
+
+function enableEnterNavigation(formId) {
+
+    const form =
+        document.getElementById(formId);
+
+    if (!form) {
+        return;
+    }
+
+    form.addEventListener(
+        "keydown",
+        function(event) {
+
+            if (
+                event.key !== "Enter"
+            ) {
+                return;
+            }
+
+            /*
+             * Se estiver em textarea,
+             * permite quebra de linha.
+             */
+            if (
+                event.target.tagName === "TEXTAREA"
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const fields =
+                Array.from(
+                    form.querySelectorAll(
+                        "input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled])"
+                    )
+                ).filter(
+                    field =>
+                        field.offsetParent !== null
+                );
+
+            const currentIndex =
+                fields.indexOf(
+                    event.target
+                );
+
+            if (
+                currentIndex === -1
+            ) {
+                return;
+            }
+
+            const nextField =
+                fields[currentIndex + 1];
+
+            if (nextField) {
+
+                nextField.focus();
+
+                /*
+                 * Se for campo de texto,
+                 * seleciona o conteúdo.
+                 */
+                if (
+                    nextField.select
+                ) {
+                    nextField.select();
+                }
+
+            }
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   ATIVAR NAVEGAÇÃO POR ENTER
+===================================================== */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        enableEnterNavigation(
+            "descargaForm"
+        );
+
+        enableEnterNavigation(
+            "gastoForm"
+        );
+
+        enableEnterNavigation(
+            "userForm"
+        );
+
+    }
+);
