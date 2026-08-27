@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>DISLAM - Controle de Descargas</title>
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- =====================================================
+     LOGIN
+===================================================== -->
+
+<section id="loginScreen" class="login-screen">
+
+    <div class="login-box">
+
+        <div class="login-logo">
+            <div class="logo-icon">
+                <i class="fa-solid fa-truck"></i>
+            </div>
+
+            <h1>DISLAM</h1>
+
+            <p>Controle de Descargas</p>
+        </div>
+
+        <form id="loginForm">
+
+            <div class="input-group">
+
+                <label>Usuário</label>
+
+                <div class="input-icon">
+
+                    <i class="fa-solid fa-user"></i>
+
+                    <input
+                        type="text"
+                        id="loginUsername"
+                        placeholder="Digite seu usuário"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Senha</label>
+
+                <div class="input-icon">
+
+                    <i class="fa-solid fa-lock"></i>
+
+                    <input
+                        type="password"
+                        id="loginPassword"
+                        placeholder="Digite sua senha"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+            <div id="loginMessage"
+                 class="login-message">
+            </div>
+
+            <button type="submit"
+                    class="btn-primary login-button">
+
+                <i class="fa-solid fa-right-to-bracket"></i>
+
+                Entrar
+
+            </button>
+
+        </form>
+
+        <div class="login-footer">
+            DISLAM • Sistema interno
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     APLICAÇÃO
+===================================================== -->
+
+<div id="app" class="app hidden">
+
+    <!-- =================================================
+         SIDEBAR
+    ================================================= -->
+
+    <aside id="sidebar" class="sidebar">
+
+        <div class="sidebar-header">
+
+            <div class="brand">
+
+                <div class="brand-icon">
+                    <i class="fa-solid fa-truck-fast"></i>
+                </div>
+
+                <div>
+                    <strong>DISLAM</strong>
+                    <span>Controle</span>
+                </div>
+
+            </div>
+
+            <button id="closeSidebar"
+                    class="sidebar-close">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <div class="sidebar-user">
+
+            <div id="sidebarAvatar"
+                 class="avatar">
+                A
+            </div>
+
+            <div>
+
+                <strong id="sidebarUserName">
+                    Administrador
+                </strong>
+
+                <span id="sidebarUserRole">
+                    Administrador
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <button class="menu-item active"
+                    data-page="dashboard">
+
+                <i class="fa-solid fa-chart-line"></i>
+
+                <span>Painel Inicial</span>
+
+            </button>
+
+
+            <button class="menu-item"
+                    data-page="descargas">
+
+                <i class="fa-solid fa-truck"></i>
+
+                <span>Descargas</span>
+
+            </button>
+
+
+            <button class="menu-item"
+                    data-page="gastos">
+
+                <i class="fa-solid fa-money-bill-transfer"></i>
+
+                <span>Gastos</span>
+
+            </button>
+
+
+            <button class="menu-item"
+                    data-page="caixa">
+
+                <i class="fa-solid fa-wallet"></i>
+
+                <span>Caixa</span>
+
+            </button>
+
+
+            <button class="menu-item"
+                    data-page="historico">
+
+                <i class="fa-solid fa-clock-rotate-left"></i>
+
+                <span>Histórico</span>
+
+            </button>
+
+
+            <div id="adminMenu">
+
+                <div class="menu-section">
+                    ADMINISTRAÇÃO
+                </div>
+
+                <button class="menu-item"
+                        data-page="usuarios">
+
+                    <i class="fa-solid fa-users"></i>
+
+                    <span>Usuários</span>
+
+                </button>
+
+            </div>
+
+
+            <div class="menu-section">
+                CONTA
+            </div>
+
+
+            <button class="menu-item"
+                    data-page="conta">
+
+                <i class="fa-solid fa-user-gear"></i>
+
+                <span>Minha Conta</span>
+
+            </button>
+
+
+            <button id="logoutBtn"
+                    class="menu-item logout">
+
+                <i class="fa-solid fa-right-from-bracket"></i>
+
+                <span>Sair da conta</span>
+
+            </button>
+
+        </nav>
+
+    </aside>
+
+
+    <!-- =================================================
+         CONTEÚDO
+    ================================================= -->
+
+    <main class="main-content">
+
+        <header class="topbar">
+
+            <button id="openSidebar"
+                    class="mobile-menu">
+
+                <i class="fa-solid fa-bars"></i>
+
+            </button>
+
+
+            <div>
+
+                <h2 id="currentPageTitle">
+                    Painel Inicial
+                </h2>
+
+                <span id="currentDate"></span>
+
+            </div>
+
+
+            <div class="top-user">
+
+                <div id="topAvatar"
+                     class="avatar small">
+                    A
+                </div>
+
+                <div>
+
+                    <strong id="topUserName">
+                        Administrador
+                    </strong>
+
+                    <span id="topUserRole">
+                        Administrador
+                    </span>
+
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <div class="content">
+
+
+<!-- =====================================================
+     DASHBOARD
+===================================================== -->
+
+<section id="page-dashboard"
+         class="page active">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Painel Inicial</h1>
+
+            <p>
+                Visão geral do controle financeiro.
+            </p>
+
+        </div>
+
+        <button class="btn-primary"
+                data-page-link="descargas">
+
+            <i class="fa-solid fa-plus"></i>
+
+            Nova descarga
+
+        </button>
+
+    </div>
+
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+
+            <div class="stat-icon blue">
+                <i class="fa-solid fa-truck"></i>
+            </div>
+
+            <div>
+
+                <span>Descargas</span>
+
+                <strong id="dashDescargas">0</strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon green">
+                <i class="fa-solid fa-arrow-down"></i>
+            </div>
+
+            <div>
+
+                <span>Recebimentos</span>
+
+                <strong id="dashRecebido">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon red">
+                <i class="fa-solid fa-arrow-up"></i>
+            </div>
+
+            <div>
+
+                <span>Gastos</span>
+
+                <strong id="dashGastos">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon purple">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+
+            <div>
+
+                <span>Saldo</span>
+
+                <strong id="dashSaldo">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="dashboard-grid">
+
+        <div class="card chart-card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h3>Resumo financeiro</h3>
+
+                    <p>
+                        Entradas x saídas
+                    </p>
+
+                </div>
+
+            </div>
+
+            <div class="chart-container">
+
+                <canvas id="financeChart"></canvas>
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h3>Últimas descargas</h3>
+
+                    <p>
+                        5 registros mais recentes
+                    </p>
+
+                </div>
+
+                <button class="link-button"
+                        data-page-link="descargas">
+
+                    Ver todas
+
+                </button>
+
+            </div>
+
+            <div id="latestDescargas"
+                 class="activity-list">
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="dashboard-grid">
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h3>Últimos gastos</h3>
+
+                    <p>
+                        5 registros mais recentes
+                    </p>
+
+                </div>
+
+                <button class="link-button"
+                        data-page-link="gastos">
+
+                    Ver todos
+
+                </button>
+
+            </div>
+
+            <div id="latestGastos"
+                 class="activity-list">
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <h3>Resumo do sistema</h3>
+
+            </div>
+
+            <div class="summary-list">
+
+                <div>
+                    <span>Descargas registradas</span>
+                    <strong id="summaryDescargas">0</strong>
+                </div>
+
+                <div>
+                    <span>Fornecedores</span>
+                    <strong id="summaryFornecedores">0</strong>
+                </div>
+
+                <div>
+                    <span>Gastos registrados</span>
+                    <strong id="summaryGastos">0</strong>
+                </div>
+
+                <div>
+                    <span>Usuários</span>
+                    <strong id="summaryUsuarios">0</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     DESCARGAS
+===================================================== -->
+
+<section id="page-descargas"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Descargas</h1>
+
+            <p>
+                Controle das descargas realizadas.
+            </p>
+
+        </div>
+
+        <button id="newDescargaBtn"
+                class="btn-primary">
+
+            <i class="fa-solid fa-plus"></i>
+
+            Registrar descarga
+
+        </button>
+
+    </div>
+
+
+    <!-- FILTROS -->
+
+    <div class="card filters-card">
+
+        <div class="filters-title">
+
+            <div>
+
+                <h3>Filtros</h3>
+
+                <p>
+                    Filtre por período ou pesquise um registro.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="filters-grid">
+
+            <div class="input-group">
+
+                <label>Data inicial</label>
+
+                <input
+                    type="date"
+                    id="filterDescargaStart"
+                >
+
+            </div>
+
+
+            <div class="input-group">
+
+                <label>Data final</label>
+
+                <input
+                    type="date"
+                    id="filterDescargaEnd"
+                >
+
+            </div>
+
+
+            <div class="input-group search-field">
+
+                <label>Pesquisar</label>
+
+                <div class="input-icon">
+
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                    <input
+                        type="text"
+                        id="filterDescargaSearch"
+                        placeholder="Fornecedor, motorista, transportadora..."
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="filter-action">
+
+                <button id="clearDescargaFilters"
+                        class="btn-secondary">
+
+                    <i class="fa-solid fa-rotate-left"></i>
+
+                    Limpar
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="table-summary">
+
+        <div>
+            <strong id="descargasCount">0</strong>
+            registros encontrados
+        </div>
+
+        <div>
+            Total:
+            <strong id="descargasFilteredTotal">
+                R$ 0,00
+            </strong>
+        </div>
+
+    </div>
+
+
+    <div class="card table-card">
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>Data</th>
+                        <th>Fornecedor</th>
+                        <th>Transportadora</th>
+                        <th>Motorista</th>
+                        <th>Valor</th>
+                        <th>Criado por</th>
+                        <th>Última alteração</th>
+                        <th>Ações</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="descargasTable"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     GASTOS
+===================================================== -->
+
+<section id="page-gastos"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Gastos</h1>
+
+            <p>
+                Controle de despesas e gastos.
+            </p>
+
+        </div>
+
+        <button id="newGastoBtn"
+                class="btn-primary">
+
+            <i class="fa-solid fa-plus"></i>
+
+            Registrar gasto
+
+        </button>
+
+    </div>
+
+
+    <div class="card filters-card">
+
+        <div class="filters-title">
+
+            <div>
+
+                <h3>Filtros</h3>
+
+                <p>
+                    Escolha o período e utilize a pesquisa.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="filters-grid">
+
+            <div class="input-group">
+
+                <label>Data inicial</label>
+
+                <input
+                    type="date"
+                    id="filterGastoStart"
+                >
+
+            </div>
+
+
+            <div class="input-group">
+
+                <label>Data final</label>
+
+                <input
+                    type="date"
+                    id="filterGastoEnd"
+                >
+
+            </div>
+
+
+            <div class="input-group search-field">
+
+                <label>Pesquisar</label>
+
+                <div class="input-icon">
+
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                    <input
+                        type="text"
+                        id="filterGastoSearch"
+                        placeholder="Descrição, fornecedor..."
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="filter-action">
+
+                <button id="clearGastoFilters"
+                        class="btn-secondary">
+
+                    <i class="fa-solid fa-rotate-left"></i>
+
+                    Limpar
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="table-summary">
+
+        <div>
+
+            <strong id="gastosCount">0</strong>
+
+            registros encontrados
+
+        </div>
+
+        <div>
+
+            Total:
+
+            <strong id="gastosFilteredTotal">
+                R$ 0,00
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="card table-card">
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Fornecedor</th>
+                        <th>Valor</th>
+                        <th>Criado por</th>
+                        <th>Última alteração</th>
+                        <th>Ações</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="gastosTable"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     CAIXA
+===================================================== -->
+
+<section id="page-caixa"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Caixa</h1>
+
+            <p>
+                Entradas, saídas e saldo.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+
+            <div class="stat-icon green">
+                <i class="fa-solid fa-arrow-down"></i>
+            </div>
+
+            <div>
+
+                <span>Entradas</span>
+
+                <strong id="cashEntradas">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon red">
+                <i class="fa-solid fa-arrow-up"></i>
+            </div>
+
+            <div>
+
+                <span>Saídas</span>
+
+                <strong id="cashSaidas">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon purple">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+
+            <div>
+
+                <span>Saldo</span>
+
+                <strong id="cashSaldo">
+                    R$ 0,00
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="card table-card">
+
+        <div class="card-header">
+
+            <div>
+
+                <h3>Movimentações</h3>
+
+                <p>
+                    Todas as entradas e saídas.
+                </p>
+
+            </div>
+
+        </div>
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>Data</th>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Responsável</th>
+                        <th>Valor</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="cashTable"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     HISTÓRICO
+===================================================== -->
+
+<section id="page-historico"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Histórico</h1>
+
+            <p>
+                Registro das ações realizadas no sistema.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <div id="historyList"
+             class="history-list">
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     USUÁRIOS
+===================================================== -->
+
+<section id="page-usuarios"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Usuários</h1>
+
+            <p>
+                Gerenciamento dos usuários do sistema.
+            </p>
+
+        </div>
+
+        <button id="newUserBtn"
+                class="btn-primary">
+
+            <i class="fa-solid fa-user-plus"></i>
+
+            Novo usuário
+
+        </button>
+
+    </div>
+
+
+    <div id="usersGrid"
+         class="users-grid">
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     MINHA CONTA
+===================================================== -->
+
+<section id="page-conta"
+         class="page">
+
+    <div class="page-header">
+
+        <div>
+
+            <h1>Minha Conta</h1>
+
+            <p>
+                Dados e segurança da sua conta.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="account-grid">
+
+        <div class="card account-card">
+
+            <div id="accountAvatar"
+                 class="account-avatar">
+                A
+            </div>
+
+            <h2 id="accountName">
+                Administrador
+            </h2>
+
+            <p id="accountRole">
+                Administrador
+            </p>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h3>Alterar senha</h3>
+
+                    <p>
+                        Atualize sua senha de acesso.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <form id="changePasswordForm">
+
+                <div class="input-group">
+
+                    <label>Senha atual</label>
+
+                    <input
+                        type="password"
+                        id="currentPassword"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Nova senha</label>
+
+                    <input
+                        type="password"
+                        id="newPassword"
+                        minlength="4"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Confirmar nova senha</label>
+
+                    <input
+                        type="password"
+                        id="confirmPassword"
+                        minlength="4"
+                        required
+                    >
+
+                </div>
+
+
+                <button class="btn-primary"
+                        type="submit">
+
+                    <i class="fa-solid fa-key"></i>
+
+                    Alterar senha
+
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<!-- =====================================================
+     MODAL DESCARGA
+===================================================== -->
+
+<div id="descargaModal"
+     class="modal">
+
+    <div class="modal-box">
+
+        <div class="modal-header">
+
+            <div>
+
+                <h2 id="descargaModalTitle">
+                    Registrar descarga
+                </h2>
+
+                <p>
+                    Informe os dados da descarga.
+                </p>
+
+            </div>
+
+            <button class="modal-close"
+                    data-close="descargaModal">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <form id="descargaForm">
+
+            <input type="hidden"
+                   id="descargaId">
+
+
+            <div class="form-grid">
+
+                <div class="input-group">
+
+                    <label>Data</label>
+
+                    <input
+                        type="datetime-local"
+                        id="descargaData"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Valor</label>
+
+                    <input
+                        type="text"
+                        id="descargaValor"
+                        placeholder="0,00"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Fornecedor</label>
+
+                    <input
+                        type="text"
+                        id="descargaFornecedor"
+                        placeholder="Nome do fornecedor"
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Transportadora</label>
+
+                    <input
+                        type="text"
+                        id="descargaTransportadora"
+                        placeholder="Transportadora"
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Motorista</label>
+
+                    <input
+                        type="text"
+                        id="descargaMotorista"
+                        placeholder="Nome do motorista"
+                    >
+
+                </div>
+
+
+                <div class="input-group full">
+
+                    <label>Observação</label>
+
+                    <textarea
+                        id="descargaObservacao"
+                        rows="3"
+                        placeholder="Observações..."
+                    ></textarea>
+
+                </div>
+
+            </div>
+
+
+            <div class="modal-actions">
+
+                <button type="button"
+                        class="btn-secondary"
+                        data-close="descargaModal">
+
+                    Cancelar
+
+                </button>
+
+                <button type="submit"
+                        class="btn-primary">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Salvar
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     MODAL GASTO
+===================================================== -->
+
+<div id="gastoModal"
+     class="modal">
+
+    <div class="modal-box">
+
+        <div class="modal-header">
+
+            <div>
+
+                <h2 id="gastoModalTitle">
+                    Registrar gasto
+                </h2>
+
+                <p>
+                    Informe os dados da despesa.
+                </p>
+
+            </div>
+
+            <button class="modal-close"
+                    data-close="gastoModal">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <form id="gastoForm">
+
+            <input type="hidden"
+                   id="gastoId">
+
+
+            <div class="form-grid">
+
+                <div class="input-group">
+
+                    <label>Data</label>
+
+                    <input
+                        type="datetime-local"
+                        id="gastoData"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Valor</label>
+
+                    <input
+                        type="text"
+                        id="gastoValor"
+                        placeholder="0,00"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Descrição</label>
+
+                    <input
+                        type="text"
+                        id="gastoDescricao"
+                        placeholder="Descrição do gasto"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Fornecedor</label>
+
+                    <input
+                        type="text"
+                        id="gastoFornecedor"
+                        placeholder="Fornecedor"
+                    >
+
+                </div>
+
+
+                <div class="input-group full">
+
+                    <label>Observação</label>
+
+                    <textarea
+                        id="gastoObservacao"
+                        rows="3"
+                        placeholder="Observações..."
+                    ></textarea>
+
+                </div>
+
+            </div>
+
+
+            <div class="modal-actions">
+
+                <button type="button"
+                        class="btn-secondary"
+                        data-close="gastoModal">
+
+                    Cancelar
+
+                </button>
+
+                <button type="submit"
+                        class="btn-primary">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Salvar
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     MODAL USUÁRIO
+===================================================== -->
+
+<div id="userModal"
+     class="modal">
+
+    <div class="modal-box">
+
+        <div class="modal-header">
+
+            <div>
+
+                <h2 id="userModalTitle">
+                    Novo usuário
+                </h2>
+
+                <p>
+                    Crie ou altere um usuário.
+                </p>
+
+            </div>
+
+            <button class="modal-close"
+                    data-close="userModal">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <form id="userForm">
+
+            <input type="hidden"
+                   id="userId">
+
+
+            <div class="form-grid">
+
+                <div class="input-group">
+
+                    <label>Nome</label>
+
+                    <input
+                        type="text"
+                        id="userName"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Usuário</label>
+
+                    <input
+                        type="text"
+                        id="userUsername"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Senha</label>
+
+                    <input
+                        type="password"
+                        id="userPassword"
+                        placeholder="Deixe vazio para manter"
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Perfil</label>
+
+                    <select id="userRole">
+
+                        <option value="user">
+                            Usuário
+                        </option>
+
+                        <option value="admin">
+                            Administrador
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <div class="modal-actions">
+
+                <button type="button"
+                        class="btn-secondary"
+                        data-close="userModal">
+
+                    Cancelar
+
+                </button>
+
+                <button type="submit"
+                        class="btn-primary">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Salvar
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     TOAST
+===================================================== -->
+
+<div id="toastContainer"
+     class="toast-container">
+</div>
+
+
+<script type="module" src="script.js"></script>
+
+</body>
+</html>
