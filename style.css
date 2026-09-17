@@ -837,53 +837,6 @@ td {
 
 
 /* =====================================================
-   HISTÓRICO
-===================================================== */
-
-.history-list {
-    display: flex;
-    flex-direction: column;
-}
-
-.history-item {
-    display: flex;
-    gap: 13px;
-    padding: 17px 0;
-    border-bottom: 1px solid var(--border);
-}
-
-.history-item:last-child {
-    border-bottom: none;
-}
-
-.history-icon {
-    width: 40px;
-    height: 40px;
-    background: #eff8ff;
-    color: var(--primary);
-    border-radius: 10px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.history-content strong {
-    color: var(--dark);
-    font-size: 14px;
-}
-
-.history-content p {
-    margin: 4px 0;
-    font-size: 13px;
-}
-
-.history-content small {
-    color: var(--muted);
-    font-size: 11px;
-}
-
-
-/* =====================================================
    MODAL
 ===================================================== */
 
@@ -1137,4 +1090,4 @@ td {
 /* AJUSTES DE INTERAÇÃO */
 body { user-select: none; -webkit-user-select: none; }
 input, textarea, select, [contenteditable="true"] { user-select: text; -webkit-user-select: text; }
-button, a, .menu-item, .card, .stat-card, .activity-item, .history-item { user-select: none; -webkit-user-select: none; }
+button, a, .menu-item, .card, .stat-card, .activity-item { user-select: none; -webkit-user-select: none; }
