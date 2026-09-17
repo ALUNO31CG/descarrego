@@ -29,7 +29,6 @@ const db = getFirestore(firebaseApp);
 let cloudUsers = [];
 let cloudDescargas = [];
 let cloudGastos = [];
-let cloudHistory = [];
 
 async function loadCollection(name) {
     const snapshot = await getDocs(collection(db, name));
@@ -44,7 +43,6 @@ async function writeCollection(name, items, previousOverride = null) {
         users: cloudUsers,
         descargas: cloudDescargas,
         gastos: cloudGastos,
-        history: cloudHistory
     }[name] || [];
 
     const currentIds = new Set(items.map(item => String(item.id)));
@@ -71,19 +69,16 @@ async function writeCollection(name, items, previousOverride = null) {
     if (name === "users") cloudUsers = [...items];
     if (name === "descargas") cloudDescargas = [...items];
     if (name === "gastos") cloudGastos = [...items];
-    if (name === "history") cloudHistory = [...items];
 }
 
 async function initializeCloudData() {
     const localUsers = JSON.parse(localStorage.getItem(STORAGE_USERS) || "null");
     const localDescargas = JSON.parse(localStorage.getItem(STORAGE_DESCARGAS) || "[]");
     const localGastos = JSON.parse(localStorage.getItem(STORAGE_GASTOS) || "[]");
-    const localHistory = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]");
 
     cloudUsers = await loadCollection("users");
     cloudDescargas = await loadCollection("descargas");
     cloudGastos = await loadCollection("gastos");
-    cloudHistory = await loadCollection("history");
 
     /*
      * Migração automática:
@@ -110,22 +105,16 @@ async function initializeCloudData() {
         await writeCollection("gastos", localGastos);
     }
 
-    if (!cloudHistory.length && localHistory.length) {
-        await writeCollection("history", localHistory);
-    }
-
     /* Mantém uma cópia local apenas como cache/compatibilidade. */
     localStorage.setItem(STORAGE_USERS, JSON.stringify(cloudUsers));
     localStorage.setItem(STORAGE_DESCARGAS, JSON.stringify(cloudDescargas));
     localStorage.setItem(STORAGE_GASTOS, JSON.stringify(cloudGastos));
-    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(cloudHistory));
 }
 
 
 const STORAGE_USERS = "dislam_users";
 const STORAGE_DESCARGAS = "dislam_descargas";
 const STORAGE_GASTOS = "dislam_gastos";
-const STORAGE_HISTORY = "dislam_history";
 const STORAGE_SESSION = "dislam_session";
 
 
@@ -176,20 +165,6 @@ function saveGastos(data) {
         console.error("Erro ao salvar gastos no Firestore:", error)
     );
 }
-
-function getHistory() {
-    return cloudHistory;
-}
-
-function saveHistory(data) {
-    const previous = cloudHistory;
-    cloudHistory = [...data];
-    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(cloudHistory));
-    writeCollection("history", cloudHistory, previous).catch(error =>
-        console.error("Erro ao salvar histórico no Firestore:", error)
-    );
-}
-
 
 /* =====================================================
    SESSÃO
@@ -405,116 +380,6 @@ function showToast(
 
 
 /* =====================================================
-   HISTÓRICO
-===================================================== */
-
-function addHistory(
-    action,
-    description
-) {
-
-    const history =
-        getHistory();
-
-    history.unshift({
-
-        id: generateId(),
-
-        action,
-
-        description,
-
-        userId:
-            currentUser
-                ? currentUser.id
-                : null,
-
-        userName:
-            currentUser
-                ? currentUser.name
-                : "Sistema",
-
-        date:
-            new Date().toISOString()
-
-    });
-
-    saveHistory(history);
-
-}
-
-
-function renderHistory() {
-
-    const container =
-        document.getElementById(
-            "historyList"
-        );
-
-    const history =
-        getHistory();
-
-    if (!history.length) {
-
-        container.innerHTML = `
-
-            <div class="empty-state">
-
-                <i class="fa-solid fa-clock-rotate-left"></i>
-
-                <p>
-                    Nenhuma movimentação registrada.
-                </p>
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-    container.innerHTML =
-        history.map(item => `
-
-            <div class="history-item">
-
-                <div class="history-icon">
-
-                    <i class="fa-solid fa-pen-to-square"></i>
-
-                </div>
-
-                <div class="history-content">
-
-                    <strong>
-                        ${escapeHTML(item.action)}
-                    </strong>
-
-                    <p>
-                        ${escapeHTML(item.description)}
-                    </p>
-
-                    <small>
-
-                        ${escapeHTML(item.userName)}
-
-                        •
-
-                        ${formatDate(item.date)}
-
-                    </small>
-
-                </div>
-
-            </div>
-
-        `).join("");
-
-}
-
-
-/* =====================================================
    LOGIN
 ===================================================== */
 
@@ -600,8 +465,7 @@ function showApplication() {
 
     renderCash();
 
-    renderHistory();
-
+    
     renderUsers();
 
     updateCurrentDate();
@@ -751,9 +615,6 @@ const pageNames = {
     caixa:
         "Caixa",
 
-    historico:
-        "Histórico",
-
     usuarios:
         "Usuários",
 
@@ -851,12 +712,7 @@ function navigate(page) {
     if (page === "caixa") {
         renderCash();
     }
-
-    if (page === "historico") {
-        renderHistory();
-    }
-
-    if (page === "usuarios") {
+if (page === "usuarios") {
         renderUsers();
     }
 
@@ -1106,11 +962,7 @@ function saveDescarga(event) {
 
             };
 
-            addHistory(
-                "Descarga editada",
-                `Descarga de ${fornecedor || "fornecedor não informado"} foi editada.`
-            );
-
+            
         }
 
     } else {
@@ -1148,11 +1000,7 @@ function saveDescarga(event) {
 
         });
 
-        addHistory(
-            "Descarga registrada",
-            `Nova descarga ${fornecedor ? "do fornecedor " + fornecedor : "sem fornecedor informado"} registrada.`
-        );
-
+        
     }
 
     saveDescargas(descargas);
@@ -1439,11 +1287,7 @@ function deleteDescarga(id) {
         )
     );
 
-    addHistory(
-        "Descarga excluída",
-        `Descarga de ${item.fornecedor || "fornecedor não informado"} foi excluída.`
-    );
-
+    
     renderDescargas();
 
     renderCash();
@@ -1623,11 +1467,7 @@ function saveGasto(event) {
 
             };
 
-            addHistory(
-                "Gasto editado",
-                `O gasto ${descricao || "sem descrição"} foi editado.`
-            );
-
+            
         }
 
     } else {
@@ -1663,11 +1503,7 @@ function saveGasto(event) {
 
         });
 
-        addHistory(
-            "Gasto registrado",
-            `Novo gasto ${descricao || "sem descrição"} registrado.`
-        );
-
+        
     }
 
     saveGastos(gastos);
@@ -1950,11 +1786,7 @@ function deleteGasto(id) {
         )
     );
 
-    addHistory(
-        "Gasto excluído",
-        `O gasto ${item.descricao || "sem descrição"} foi excluído.`
-    );
-
+    
     renderGastos();
 
     renderCash();
@@ -2854,11 +2686,7 @@ function saveUser(event) {
 
             }
 
-            addHistory(
-                "Usuário editado",
-                `O usuário ${name} foi alterado pelo administrador.`
-            );
-
+            
         }
 
     } else {
@@ -2892,11 +2720,7 @@ function saveUser(event) {
 
         });
 
-        addHistory(
-            "Usuário criado",
-            `O usuário ${name} foi criado.`
-        );
-
+        
     }
 
     saveUsers(users);
@@ -2968,11 +2792,7 @@ function deleteUser(id) {
         )
     );
 
-    addHistory(
-        "Usuário excluído",
-        `O usuário ${user.name} foi excluído.`
-    );
-
+    
     renderUsers();
 
     updateDashboard();
@@ -3073,11 +2893,7 @@ function changePassword(event) {
 
     saveSession();
 
-    addHistory(
-        "Senha alterada",
-        `A senha do usuário ${currentUser.name} foi alterada.`
-    );
-
+    
     document
         .getElementById(
             "changePasswordForm"
